@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --copa-green: #006600;
+  --copa-yellow: #FFD700;
+  --copa-dark: #004400;
+}
+
+body {
+  background-color: #f0f7f0;
+}
