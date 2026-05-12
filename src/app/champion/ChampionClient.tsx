@@ -19,7 +19,7 @@ const SELECOES = [
 interface ChampionPrediction {
   selecao: string
   pontos: number
-  profiles?: { nome: string } | null
+  profiles?: { nome: string } | { nome: string }[] | null
 }
 
 interface Props {
@@ -153,7 +153,9 @@ export default function ChampionClient({ myPrediction, allPredictions, userId }:
             {allPredictions.map((pred, i) => (
               <div key={i} className="flex items-center justify-between py-2 border-b last:border-0">
                 <span className="text-gray-700 font-medium">
-                  {pred.profiles?.nome || 'Participante'}
+                  {Array.isArray(pred.profiles)
+                    ? pred.profiles[0]?.nome || 'Participante'
+                    : pred.profiles?.nome || 'Participante'}
                 </span>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-600">{pred.selecao}</span>
