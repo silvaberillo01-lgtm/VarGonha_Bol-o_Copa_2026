@@ -4,6 +4,8 @@ import Navbar from '@/components/Navbar'
 import LogoutButton from '@/components/LogoutButton'
 import { Profile } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export default async function DashboardLayout({
   children,
 }: {

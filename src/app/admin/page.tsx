@@ -4,6 +4,8 @@ import Navbar from '@/components/Navbar'
 import AdminClient from './AdminClient'
 import { Profile, Game } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminPage() {
   const supabase = createServerClient()
   const { data: { session } } = await supabase.auth.getSession()

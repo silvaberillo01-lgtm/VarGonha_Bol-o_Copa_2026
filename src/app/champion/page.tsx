@@ -4,6 +4,8 @@ import Navbar from '@/components/Navbar'
 import ChampionClient from './ChampionClient'
 import { Profile } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ChampionPage() {
   const supabase = createServerClient()
   const { data: { session } } = await supabase.auth.getSession()
