@@ -222,7 +222,7 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
   }
 
   const handleSaveLista = async () => {
-    const lista = jogadoresText.split('\n').map((l) => l.trim()).filter(Boolean)
+    const lista = jogadoresText.split('\n').map((l: string) => l.trim()).filter(Boolean)
     setSavingLista(true)
     setListaMsg('')
     const response = await fetch('/api/admin/set-special', {
