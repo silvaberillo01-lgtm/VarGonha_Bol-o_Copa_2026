@@ -1,22 +1,22 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { DEADLINE_FASE1, DEADLINE_CAMPEAO } from '@/lib/scoring'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = createServerClient()
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  // Check if user is approved
   const { data: profile } = await supabase
     .from('profiles')
     .select('status')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (!profile || profile.status !== 'approved') {
@@ -25,33 +25,24 @@ export async function POST(request: Request) {
 
   const body = await request.json()
 
-  // Champion prediction
   if (body.type === 'champion') {
     if (new Date() > DEADLINE_CAMPEAO) {
       return NextResponse.json({ error: 'Prazo para palpite do campeão encerrado' }, { status: 400 })
     }
 
     const { selecao } = body
-
     if (!selecao) {
       return NextResponse.json({ error: 'Selecione uma seleção' }, { status: 400 })
     }
 
     const { error } = await supabase
       .from('champion_predictions')
-      .upsert(
-        { user_id: session.user.id, selecao, pontos: 0 },
-        { onConflict: 'user_id' }
-      )
+      .upsert({ user_id: user.id, selecao, pontos: 0 }, { onConflict: 'user_id' })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
   }
 
-  // Game prediction
   if (new Date() > DEADLINE_FASE1) {
     return NextResponse.json({ error: 'Prazo para palpites encerrado' }, { status: 400 })
   }
@@ -66,7 +57,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Gols não podem ser negativos' }, { status: 400 })
   }
 
-  // Check if game already has result
   const { data: game } = await supabase
     .from('games')
     .select('resultado_lancado')
@@ -80,19 +70,10 @@ export async function POST(request: Request) {
   const { error } = await supabase
     .from('predictions')
     .upsert(
-      {
-        user_id: session.user.id,
-        game_id,
-        gols_casa,
-        gols_fora,
-        pontos: 0,
-      },
+      { user_id: user.id, game_id, gols_casa, gols_fora, pontos: 0 },
       { onConflict: 'user_id,game_id' }
     )
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

@@ -1,22 +1,22 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 import { calcularPontos } from '@/lib/scoring'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = createServerClient()
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  // Check admin
   const { data: profile } = await supabase
     .from('profiles')
     .select('is_admin')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (!profile?.is_admin) {
@@ -33,42 +33,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Gols não podem ser negativos' }, { status: 400 })
   }
 
-  // Update game result
   const { error: gameError } = await supabase
     .from('games')
-    .update({
-      gols_casa_real,
-      gols_fora_real,
-      resultado_lancado: true,
-    })
+    .update({ gols_casa_real, gols_fora_real, resultado_lancado: true })
     .eq('id', game_id)
 
-  if (gameError) {
-    return NextResponse.json({ error: gameError.message }, { status: 500 })
-  }
+  if (gameError) return NextResponse.json({ error: gameError.message }, { status: 500 })
 
-  // Fetch all predictions for this game
   const { data: predictions, error: predError } = await supabase
     .from('predictions')
     .select('id, gols_casa, gols_fora')
     .eq('game_id', game_id)
 
-  if (predError) {
-    return NextResponse.json({ error: predError.message }, { status: 500 })
-  }
+  if (predError) return NextResponse.json({ error: predError.message }, { status: 500 })
 
-  // Calculate and update points for each prediction
   const updates = (predictions || []).map((pred) => {
-    const pontos = calcularPontos(
-      pred.gols_casa,
-      pred.gols_fora,
-      gols_casa_real,
-      gols_fora_real
-    )
-    return supabase
-      .from('predictions')
-      .update({ pontos })
-      .eq('id', pred.id)
+    const pontos = calcularPontos(pred.gols_casa, pred.gols_fora, gols_casa_real, gols_fora_real)
+    return supabase.from('predictions').update({ pontos }).eq('id', pred.id)
   })
 
   await Promise.all(updates)
