@@ -198,21 +198,24 @@ export default function ChampionClient({
                 ✓ Palpite atual: <strong>{myArtilheiro.palpite}</strong>
               </div>
             )}
-            <div>
+            {jogadoresList.length > 0 ? (
+              <select
+                value={artilheiroInput}
+                onChange={(e) => { setArtilheiroInput(e.target.value); setSavedArt(false) }}
+                className="w-full border-2 border-green-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
+              >
+                <option value="">-- Escolha o artilheiro --</option>
+                {jogadoresList.map((j) => <option key={j} value={j}>{j}</option>)}
+              </select>
+            ) : (
               <input
                 type="text"
-                list="jogadores-list"
                 value={artilheiroInput}
                 onChange={(e) => { setArtilheiroInput(e.target.value); setSavedArt(false) }}
                 placeholder="Digite o nome do jogador..."
                 className="w-full border-2 border-green-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
               />
-              {jogadoresList.length > 0 && (
-                <datalist id="jogadores-list">
-                  {jogadoresList.map((j) => <option key={j} value={j} />)}
-                </datalist>
-              )}
-            </div>
+            )}
             {errorArt && <p className="text-red-500 text-sm">{errorArt}</p>}
             {savedArt && <p className="text-green-600 text-sm">✓ Palpite salvo com sucesso!</p>}
             <button onClick={() => handleSaveSpecial('artilheiro')} disabled={savingArt || !artilheiroInput.trim()}
@@ -247,16 +250,24 @@ export default function ChampionClient({
                 ✓ Palpite atual: <strong>{myMelhorJogador.palpite}</strong>
               </div>
             )}
-            <div>
+            {jogadoresList.length > 0 ? (
+              <select
+                value={melhorInput}
+                onChange={(e) => { setMelhorInput(e.target.value); setSavedMelhor(false) }}
+                className="w-full border-2 border-green-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
+              >
+                <option value="">-- Escolha o melhor jogador --</option>
+                {jogadoresList.map((j) => <option key={j} value={j}>{j}</option>)}
+              </select>
+            ) : (
               <input
                 type="text"
-                list="jogadores-list"
                 value={melhorInput}
                 onChange={(e) => { setMelhorInput(e.target.value); setSavedMelhor(false) }}
                 placeholder="Digite o nome do jogador..."
                 className="w-full border-2 border-green-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
               />
-            </div>
+            )}
             {errorMelhor && <p className="text-red-500 text-sm">{errorMelhor}</p>}
             {savedMelhor && <p className="text-green-600 text-sm">✓ Palpite salvo com sucesso!</p>}
             <button onClick={() => handleSaveSpecial('melhor_jogador')} disabled={savingMelhor || !melhorInput.trim()}
