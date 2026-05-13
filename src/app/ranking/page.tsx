@@ -7,39 +7,53 @@ export const dynamic = 'force-dynamic'
 
 export default async function RankingPage() {
   const supabase = createServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     redirect('/auth/login')
   }
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (!profile || profile.status !== 'approved') {
     redirect('/dashboard')
   }
 
-  // Fetch all approved profiles
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, nome')
     .eq('status', 'approved')
 
-  // Fetch all predictions with points
   const { data: predictions } = await supabase
     .from('predictions')
     .select('user_id, pontos')
 
-  // Fetch champion predictions
   const { data: championPreds } = await supabase
     .from('champion_predictions')
     .select('user_id, pontos')
 
-  // Build ranking
+  const { data: specialPreds } = await supabase
+    .from('special_predictions')
+    .select('user_id, pontos')
+
+  const { data: configRows } = await supabase
+    .from('copa_config')
+    .select('key, value')
+
+  const copaConfig: Record<string, string> = {}
+  if (configRows) {
+    for (const row of configRows) {
+      copaConfig[row.key] = row.value
+    }
+  }
+
+  const artilheiroPontos = copaConfig['artilheiro_pontos'] || '50'
+  const melhorJogadorPontos = copaConfig['melhor_jogador_pontos'] || '50'
+
   type RankEntry = {
     user_id: string
     nome: string
@@ -77,6 +91,12 @@ export default async function RankingPage() {
   championPreds?.forEach((cp) => {
     if (rankMap[cp.user_id]) {
       rankMap[cp.user_id].total_pontos += cp.pontos || 0
+    }
+  })
+
+  specialPreds?.forEach((sp) => {
+    if (rankMap[sp.user_id]) {
+      rankMap[sp.user_id].total_pontos += sp.pontos || 0
     }
   })
 
@@ -123,7 +143,7 @@ export default async function RankingPage() {
                   </tr>
                 ) : (
                   ranking.map((entry, idx) => {
-                    const isMe = entry.user_id === session.user.id
+                    const isMe = entry.user_id === user.id
                     return (
                       <tr
                         key={entry.user_id}
@@ -174,6 +194,8 @@ export default async function RankingPage() {
             <span className="text-green-600">✅ Resultado correto = 10 pts</span>
             <span className="text-blue-600">🟡 Um gol certo = 5 pts</span>
             <span className="text-purple-600">🏆 Campeão certo = 200 pts</span>
+            <span className="text-orange-600">⚽ Artilheiro certo = {artilheiroPontos} pts</span>
+            <span className="text-pink-600">🌟 Melhor Jogador certo = {melhorJogadorPontos} pts</span>
           </div>
         </div>
       </main>

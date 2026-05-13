@@ -1,14 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Profile, Game } from '@/types'
 
-interface Props {
-  users: Profile[]
-  games: Game[]
-}
-
-type Tab = 'users' | 'results' | 'knockout'
+// 48 seleções Copa 2026
+const SELECOES = [
+  'África do Sul', 'Alemanha', 'Arábia Saudita', 'Argentina', 'Argélia',
+  'Austrália', 'Áustria', 'Bélgica', 'Bósnia e Herzegovina', 'Brasil',
+  'Cabo Verde', 'Canadá', 'Catar', 'Colômbia', 'Coreia do Sul',
+  'Costa do Marfim', 'Croácia', 'Curaçao', 'Egito', 'Equador',
+  'Escócia', 'Espanha', 'Estados Unidos', 'França', 'Gana',
+  'Haiti', 'Holanda', 'Inglaterra', 'Irã', 'Iraque',
+  'Japão', 'Jordânia', 'Marrocos', 'México', 'Noruega',
+  'Nova Zelândia', 'Panamá', 'Paraguai', 'Portugal', 'RD do Congo',
+  'República Tcheca', 'Senegal', 'Suécia', 'Suíça', 'Tunísia',
+  'Turquia', 'Uruguai', 'Uzbequistão',
+].sort()
 
 const KNOCKOUT_FASES = [
   { key: 'fase32', label: 'Fase de 32' },
@@ -19,7 +27,16 @@ const KNOCKOUT_FASES = [
   { key: 'final', label: 'Final' },
 ]
 
-export default function AdminClient({ users, games }: Props) {
+interface Props {
+  users: Profile[]
+  games: Game[]
+  copaConfig: Record<string, string>
+}
+
+type Tab = 'users' | 'results' | 'knockout' | 'especiais'
+
+export default function AdminClient({ users, games, copaConfig }: Props) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>('users')
   const [localUsers, setLocalUsers] = useState<Profile[]>(users)
   const [localGames, setLocalGames] = useState<Game[]>(games)
@@ -29,6 +46,7 @@ export default function AdminClient({ users, games }: Props) {
   const [savedGame, setSavedGame] = useState<Record<string, boolean>>({})
   const [userMsg, setUserMsg] = useState<Record<string, string>>({})
   const [gameMsg, setGameMsg] = useState<Record<string, string>>({})
+  const [deletingUser, setDeletingUser] = useState<Record<string, boolean>>({})
 
   // Add game form
   const [newGame, setNewGame] = useState({
@@ -38,6 +56,31 @@ export default function AdminClient({ users, games }: Props) {
   const [addingGame, setAddingGame] = useState(false)
   const [addGameMsg, setAddGameMsg] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
+
+  // Especiais state
+  const [campeaoSelect, setCampeaoSelect] = useState(copaConfig['campeao'] || '')
+  const [savingCampeao, setSavingCampeao] = useState(false)
+  const [campeaoMsg, setCampeaoMsg] = useState('')
+
+  const [artilheiroResult, setArtilheiroResult] = useState(copaConfig['artilheiro'] || '')
+  const [artilheiroPontos, setArtilheiroPontos] = useState(copaConfig['artilheiro_pontos'] || '50')
+  const [savingArtilheiro, setSavingArtilheiro] = useState(false)
+  const [artilheiroMsg, setArtilheiroMsg] = useState('')
+
+  const [melhorJogadorResult, setMelhorJogadorResult] = useState(copaConfig['melhor_jogador'] || '')
+  const [melhorJogadorPontos, setMelhorJogadorPontos] = useState(copaConfig['melhor_jogador_pontos'] || '50')
+  const [savingMelhorJogador, setSavingMelhorJogador] = useState(false)
+  const [melhorJogadorMsg, setMelhorJogadorMsg] = useState('')
+
+  const [jogadoresLista, setJogadoresLista] = useState<string[]>(
+    copaConfig['jogadores_lista'] ? JSON.parse(copaConfig['jogadores_lista']) : []
+  )
+  const [jogadoresText, setJogadoresText] = useState(
+    copaConfig['jogadores_lista'] ? JSON.parse(copaConfig['jogadores_lista']).join('\n') : ''
+  )
+  const [savingLista, setSavingLista] = useState(false)
+  const [listaMsg, setListaMsg] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const now = new Date()
 
@@ -51,9 +94,27 @@ export default function AdminClient({ users, games }: Props) {
     setSavingUser((prev) => ({ ...prev, [userId]: false }))
     if (response.ok) {
       setLocalUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status } : u)))
-      setUserMsg((prev) => ({ ...prev, [userId]: 'Atualizado!' }))
+      setUserMsg((prev) => ({ ...prev, [userId]: status === 'approved' ? '✓ Aprovado!' : '✓ Rejeitado!' }))
+      router.refresh()
     } else {
       setUserMsg((prev) => ({ ...prev, [userId]: 'Erro ao atualizar.' }))
+    }
+  }
+
+  const handleDeleteUser = async (userId: string, nome: string) => {
+    if (!confirm(`Excluir o usuário "${nome}" permanentemente? Esta ação não pode ser desfeita.`)) return
+    setDeletingUser((prev) => ({ ...prev, [userId]: true }))
+    const response = await fetch('/api/admin/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    setDeletingUser((prev) => ({ ...prev, [userId]: false }))
+    if (response.ok) {
+      setLocalUsers((prev) => prev.filter((u) => u.id !== userId))
+    } else {
+      const data = await response.json()
+      alert(data.error || 'Erro ao excluir usuário.')
     }
   }
 
@@ -119,6 +180,78 @@ export default function AdminClient({ users, games }: Props) {
     }
   }
 
+  const handleSaveCampeao = async () => {
+    if (!campeaoSelect) { setCampeaoMsg('Selecione o campeão.'); return }
+    setSavingCampeao(true)
+    setCampeaoMsg('')
+    const response = await fetch('/api/admin/set-champion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campeao: campeaoSelect }),
+    })
+    setSavingCampeao(false)
+    if (response.ok) {
+      setCampeaoMsg('✓ Campeão salvo e pontos calculados!')
+    } else {
+      const data = await response.json()
+      setCampeaoMsg(data.error || 'Erro ao salvar.')
+    }
+  }
+
+  const handleSaveSpecial = async (tipo: 'artilheiro' | 'melhor_jogador') => {
+    const resultado = tipo === 'artilheiro' ? artilheiroResult : melhorJogadorResult
+    const pontos = tipo === 'artilheiro' ? artilheiroPontos : melhorJogadorPontos
+    const setSaving = tipo === 'artilheiro' ? setSavingArtilheiro : setSavingMelhorJogador
+    const setMsg = tipo === 'artilheiro' ? setArtilheiroMsg : setMelhorJogadorMsg
+
+    if (!resultado.trim()) { setMsg('Informe o nome.'); return }
+    setSaving(true)
+    setMsg('')
+    const response = await fetch('/api/admin/set-special', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, resultado: resultado.trim(), pontos: parseInt(pontos) || 50 }),
+    })
+    setSaving(false)
+    if (response.ok) {
+      setMsg('✓ Resultado salvo e pontos calculados!')
+    } else {
+      const data = await response.json()
+      setMsg(data.error || 'Erro ao salvar.')
+    }
+  }
+
+  const handleSaveLista = async () => {
+    const lista = jogadoresText.split('\n').map((l) => l.trim()).filter(Boolean)
+    setSavingLista(true)
+    setListaMsg('')
+    const response = await fetch('/api/admin/set-special', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jogadores_lista: lista }),
+    })
+    setSavingLista(false)
+    if (response.ok) {
+      setJogadoresLista(lista)
+      setListaMsg(`✓ Lista salva com ${lista.length} jogadores!`)
+    } else {
+      setListaMsg('Erro ao salvar lista.')
+    }
+  }
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      // Parse CSV — column A (first column)
+      const lines = text.split(/\r?\n/).map((line) => line.split(',')[0].replace(/^"|"$/g, '').trim()).filter(Boolean)
+      setJogadoresText(lines.join('\n'))
+    }
+    reader.readAsText(file)
+  }
+
   const getInitialResult = (game: Game) => {
     if (results[game.id]) return results[game.id]
     if (game.resultado_lancado && game.gols_casa_real !== null && game.gols_fora_real !== null) {
@@ -135,7 +268,6 @@ export default function AdminClient({ users, games }: Props) {
   const approvedUsers = localUsers.filter((u) => u.status === 'approved')
   const rejectedUsers = localUsers.filter((u) => u.status === 'rejected')
 
-  // Sort games: pending (past + no result) → upcoming → completed
   const groupGames = localGames.filter((g) => g.fase === 'grupos')
   const knockoutGamesLocal = localGames.filter((g) => g.fase !== 'grupos')
 
@@ -243,6 +375,12 @@ export default function AdminClient({ users, games }: Props) {
           }`}>
           🏆 Fase Eliminatória ({knockoutGamesLocal.length})
         </button>
+        <button onClick={() => setActiveTab('especiais')}
+          className={`px-6 py-2.5 rounded-lg font-bold text-sm transition-colors ${
+            activeTab === 'especiais' ? 'bg-green-700 text-yellow-400' : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}>
+          ⭐ Palpites Especiais
+        </button>
       </div>
 
       {/* USERS TAB */}
@@ -259,7 +397,7 @@ export default function AdminClient({ users, games }: Props) {
                       <p className="text-sm text-gray-500">{user.email}</p>
                       <p className="text-xs text-gray-400">Cadastro: {new Date(user.created_at).toLocaleDateString('pt-BR')}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {userMsg[user.id] && <span className="text-xs text-gray-500">{userMsg[user.id]}</span>}
                       <button onClick={() => handleUserStatus(user.id, 'approved')} disabled={savingUser[user.id]}
                         className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50">
@@ -268,6 +406,10 @@ export default function AdminClient({ users, games }: Props) {
                       <button onClick={() => handleUserStatus(user.id, 'rejected')} disabled={savingUser[user.id]}
                         className="bg-red-500 hover:bg-red-600 text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50">
                         ✗ Rejeitar
+                      </button>
+                      <button onClick={() => handleDeleteUser(user.id, user.nome)} disabled={deletingUser[user.id]}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-lg disabled:opacity-50">
+                        🗑
                       </button>
                     </div>
                   </div>
@@ -285,7 +427,7 @@ export default function AdminClient({ users, games }: Props) {
                     <th className="px-4 py-3 text-left">Nome</th>
                     <th className="px-4 py-3 text-left">Email</th>
                     <th className="px-4 py-3 text-center">Admin</th>
-                    <th className="px-4 py-3 text-center">Ação</th>
+                    <th className="px-4 py-3 text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -301,9 +443,16 @@ export default function AdminClient({ users, games }: Props) {
                         {userMsg[user.id] && <span className="text-xs text-gray-500 mr-2">{userMsg[user.id]}</span>}
                         <button onClick={() => handleUserStatus(user.id, 'rejected')}
                           disabled={savingUser[user.id] || user.is_admin}
-                          className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-30">
+                          className="text-red-500 hover:text-red-700 text-xs font-medium disabled:opacity-30 mr-3">
                           Rejeitar
                         </button>
+                        {!user.is_admin && (
+                          <button onClick={() => handleDeleteUser(user.id, user.nome)}
+                            disabled={deletingUser[user.id]}
+                            className="text-gray-400 hover:text-red-600 text-xs font-medium disabled:opacity-30">
+                            🗑 Excluir
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -327,6 +476,10 @@ export default function AdminClient({ users, games }: Props) {
                       <button onClick={() => handleUserStatus(user.id, 'approved')} disabled={savingUser[user.id]}
                         className="bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50">
                         Reativar
+                      </button>
+                      <button onClick={() => handleDeleteUser(user.id, user.nome)} disabled={deletingUser[user.id]}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-3 py-2 rounded-lg disabled:opacity-50">
+                        🗑 Excluir
                       </button>
                     </div>
                   </div>
@@ -449,6 +602,128 @@ export default function AdminClient({ users, games }: Props) {
               {sortGames(knockoutGamesLocal).completed.map(renderResultRow)}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ESPECIAIS TAB */}
+      {activeTab === 'especiais' && (
+        <div className="space-y-6">
+          {/* Champion */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-green-800 mb-1">🏆 Campeão da Copa</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Ao salvar, todos os palpites de campeão serão pontuados automaticamente (200 pts para acertos).
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <select value={campeaoSelect} onChange={(e) => setCampeaoSelect(e.target.value)}
+                className="flex-1 min-w-48 border-2 border-green-300 rounded-lg px-3 py-2 text-sm font-medium">
+                <option value="">-- Selecione o campeão --</option>
+                {SELECOES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+              <button onClick={handleSaveCampeao} disabled={savingCampeao}
+                className="bg-green-700 hover:bg-green-800 text-white font-bold px-5 py-2 rounded-lg text-sm disabled:opacity-50">
+                {savingCampeao ? 'Salvando...' : 'Salvar Campeão'}
+              </button>
+            </div>
+            {campeaoMsg && (
+              <p className={`text-sm mt-2 ${campeaoMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{campeaoMsg}</p>
+            )}
+          </div>
+
+          {/* Artilheiro */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-green-800 mb-1">⚽ Artilheiro da Copa</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Informe o nome do artilheiro e a pontuação para quem acertar.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Nome do artilheiro" value={artilheiroResult}
+                onChange={(e) => setArtilheiroResult(e.target.value)}
+                className="flex-1 min-w-48 border-2 border-green-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-600 whitespace-nowrap">Pontos para acerto:</label>
+                <input type="number" min="0" value={artilheiroPontos}
+                  onChange={(e) => setArtilheiroPontos(e.target.value)}
+                  className="w-20 border-2 border-green-300 rounded-lg px-2 py-2 text-sm text-center font-bold"
+                />
+              </div>
+              <button onClick={() => handleSaveSpecial('artilheiro')} disabled={savingArtilheiro}
+                className="bg-green-700 hover:bg-green-800 text-white font-bold px-5 py-2 rounded-lg text-sm disabled:opacity-50">
+                {savingArtilheiro ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+            {artilheiroMsg && (
+              <p className={`text-sm mt-2 ${artilheiroMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{artilheiroMsg}</p>
+            )}
+          </div>
+
+          {/* Melhor Jogador */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-green-800 mb-1">🌟 Melhor Jogador da Copa</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Informe o nome do melhor jogador e a pontuação para quem acertar.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <input type="text" placeholder="Nome do melhor jogador" value={melhorJogadorResult}
+                onChange={(e) => setMelhorJogadorResult(e.target.value)}
+                className="flex-1 min-w-48 border-2 border-green-300 rounded-lg px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-600 whitespace-nowrap">Pontos para acerto:</label>
+                <input type="number" min="0" value={melhorJogadorPontos}
+                  onChange={(e) => setMelhorJogadorPontos(e.target.value)}
+                  className="w-20 border-2 border-green-300 rounded-lg px-2 py-2 text-sm text-center font-bold"
+                />
+              </div>
+              <button onClick={() => handleSaveSpecial('melhor_jogador')} disabled={savingMelhorJogador}
+                className="bg-green-700 hover:bg-green-800 text-white font-bold px-5 py-2 rounded-lg text-sm disabled:opacity-50">
+                {savingMelhorJogador ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+            {melhorJogadorMsg && (
+              <p className={`text-sm mt-2 ${melhorJogadorMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{melhorJogadorMsg}</p>
+            )}
+          </div>
+
+          {/* Lista de Jogadores */}
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-green-800 mb-1">📋 Lista de Jogadores</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              Esta lista é usada como sugestão de autocompletar para palpites de artilheiro e melhor jogador.
+            </p>
+            <p className="text-xs text-gray-400 mb-4">
+              Cole um jogador por linha, ou envie um arquivo CSV/TXT com os nomes na coluna A (primeiro campo de cada linha).
+            </p>
+            <div className="mb-3 flex gap-3">
+              <button onClick={() => fileInputRef.current?.click()}
+                className="border border-green-300 text-green-700 text-sm font-medium px-4 py-2 rounded-lg hover:bg-green-50">
+                📂 Importar CSV/TXT
+              </button>
+              <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+              {jogadoresLista.length > 0 && (
+                <span className="text-xs text-gray-500 flex items-center">{jogadoresLista.length} jogadores na lista atual</span>
+              )}
+            </div>
+            <textarea
+              value={jogadoresText}
+              onChange={(e) => setJogadoresText(e.target.value)}
+              rows={8}
+              placeholder="Vinicius Junior&#10;Rodri&#10;Erling Haaland&#10;..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-green-400"
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <button onClick={handleSaveLista} disabled={savingLista}
+                className="bg-green-700 hover:bg-green-800 text-white font-bold px-5 py-2 rounded-lg text-sm disabled:opacity-50">
+                {savingLista ? 'Salvando...' : 'Salvar Lista'}
+              </button>
+              {listaMsg && (
+                <span className={`text-sm ${listaMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{listaMsg}</span>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -46,6 +46,15 @@ export interface ChampionPrediction {
   updated_at: string
 }
 
+export interface SpecialPrediction {
+  id: string
+  user_id: string
+  tipo: 'artilheiro' | 'melhor_jogador'
+  palpite: string
+  pontos: number
+  created_at: string
+}
+
 export interface RankingEntry {
   user_id: string
   nome: string
@@ -55,3 +64,4 @@ export interface RankingEntry {
   acertos_parciais: number
   acertos_fase2: number
 }
+

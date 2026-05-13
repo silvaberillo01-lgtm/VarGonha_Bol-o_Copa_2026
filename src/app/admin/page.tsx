@@ -8,16 +8,16 @@ export const dynamic = 'force-dynamic'
 
 export default async function AdminPage() {
   const supabase = createServerClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!session) {
+  if (!user) {
     redirect('/auth/login')
   }
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   if (!profile || !profile.is_admin) {
@@ -34,6 +34,17 @@ export default async function AdminPage() {
     .select('*')
     .order('data_hora', { ascending: true })
 
+  const { data: configRows } = await supabase
+    .from('copa_config')
+    .select('key, value')
+
+  const copaConfig: Record<string, string> = {}
+  if (configRows) {
+    for (const row of configRows) {
+      copaConfig[row.key] = row.value
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar profile={profile as Profile} />
@@ -42,6 +53,7 @@ export default async function AdminPage() {
         <AdminClient
           users={(users || []) as Profile[]}
           games={(games || []) as Game[]}
+          copaConfig={copaConfig}
         />
       </main>
     </div>
