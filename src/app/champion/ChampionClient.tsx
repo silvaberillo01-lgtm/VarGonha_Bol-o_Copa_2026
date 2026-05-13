@@ -3,17 +3,18 @@
 import { useState } from 'react'
 import { DEADLINE_CAMPEAO, BONUS_CAMPEAO } from '@/lib/scoring'
 
+// 48 seleções classificadas para a Copa do Mundo 2026
 const SELECOES = [
-  'Argentina', 'Alemanha', 'Brasil', 'França', 'Inglaterra', 'Espanha',
-  'Portugal', 'Bélgica', 'Países Baixos', 'Uruguai', 'Croácia', 'Itália',
-  'Dinamarca', 'Suíça', 'México', 'EUA', 'Canadá', 'Marrocos',
-  'Japão', 'Coreia do Sul', 'Senegal', 'Nigéria', 'Costa do Marfim',
-  'Equador', 'Colômbia', 'Chile', 'Peru', 'Sérvia', 'Turquia',
-  'Austrália', 'Irã', 'Arábia Saudita', 'Ucrânia', 'Egito',
-  'Camarões', 'Tunísia', 'Argélia', 'África do Sul', 'Jamaica',
-  'Venezuela', 'Costa Rica', 'Honduras', 'Panamá', 'Bolivia',
-  'Paraguai', 'Trinidad e Tobago', 'Iraque', 'Áustria', 'Indonésia',
-  'Nova Zelândia',
+  'África do Sul', 'Alemanha', 'Arábia Saudita', 'Argentina', 'Argélia',
+  'Austrália', 'Áustria', 'Bélgica', 'Bósnia e Herzegovina', 'Brasil',
+  'Cabo Verde', 'Canadá', 'Catar', 'Colômbia', 'Coreia do Sul',
+  'Costa do Marfim', 'Croácia', 'Curaçao', 'Egito', 'Equador',
+  'Escócia', 'Espanha', 'Estados Unidos', 'França', 'Gana',
+  'Haiti', 'Holanda', 'Inglaterra', 'Irã', 'Iraque',
+  'Japão', 'Jordânia', 'Marrocos', 'México', 'Noruega',
+  'Nova Zelândia', 'Panamá', 'Paraguai', 'Portugal', 'RD do Congo',
+  'República Tcheca', 'Senegal', 'Suécia', 'Suíça', 'Tunísia',
+  'Turquia', 'Uruguai', 'Uzbequistão',
 ].sort()
 
 interface ChampionPrediction {

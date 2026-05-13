@@ -31,7 +31,7 @@ export function getTipoAcerto(pontos: number): string {
   }
 }
 
-export const DEADLINE_FASE1 = new Date('2026-06-10T23:59:00-03:00')
-export const DEADLINE_FASE2 = new Date('2026-06-27T23:59:00-03:00')
-export const DEADLINE_CAMPEAO = new Date('2026-06-10T23:59:00-03:00')
+// First group game: June 11 at 16:00 BRT (México x África do Sul)
+export const DEADLINE_FASE1 = new Date('2026-06-11T15:00:00-03:00')
+export const DEADLINE_CAMPEAO = new Date('2026-06-11T15:00:00-03:00')
 export const BONUS_CAMPEAO = 200
