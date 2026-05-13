@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
 import { calcularPontos } from '@/lib/scoring'
 
@@ -8,7 +9,6 @@ export async function POST(request: Request) {
   const supabase = createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
@@ -33,14 +33,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Gols não podem ser negativos' }, { status: 400 })
   }
 
-  const { error: gameError } = await supabase
+  // Use admin client to bypass RLS
+  const adminSupabase = createAdminClient()
+
+  const { error: gameError } = await adminSupabase
     .from('games')
     .update({ gols_casa_real, gols_fora_real, resultado_lancado: true })
     .eq('id', game_id)
 
   if (gameError) return NextResponse.json({ error: gameError.message }, { status: 500 })
 
-  const { data: predictions, error: predError } = await supabase
+  const { data: predictions, error: predError } = await adminSupabase
     .from('predictions')
     .select('id, gols_casa, gols_fora')
     .eq('game_id', game_id)
@@ -49,7 +52,7 @@ export async function POST(request: Request) {
 
   const updates = (predictions || []).map((pred) => {
     const pontos = calcularPontos(pred.gols_casa, pred.gols_fora, gols_casa_real, gols_fora_real)
-    return supabase.from('predictions').update({ pontos }).eq('id', pred.id)
+    return adminSupabase.from('predictions').update({ pontos }).eq('id', pred.id)
   })
 
   await Promise.all(updates)

@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,6 @@ export async function POST(request: Request) {
   const supabase = createServerClient()
 
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
@@ -28,7 +28,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
   }
 
-  const { error } = await supabase
+  // Use admin client to bypass RLS for updating other users' profiles
+  const adminSupabase = createAdminClient()
+  const { error } = await adminSupabase
     .from('profiles')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', user_id)
