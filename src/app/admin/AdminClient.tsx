@@ -41,6 +41,7 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
   const [localUsers, setLocalUsers] = useState<Profile[]>(users)
   const [localGames, setLocalGames] = useState<Game[]>(games)
   const [results, setResults] = useState<Record<string, { casa: string; fora: string }>>({})
+  const [penalties, setPenalties] = useState<Record<string, { casa: string; fora: string }>>({})
   const [savingUser, setSavingUser] = useState<Record<string, boolean>>({})
   const [savingGame, setSavingGame] = useState<Record<string, boolean>>({})
   const [savedGame, setSavedGame] = useState<Record<string, boolean>>({})
@@ -123,6 +124,11 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
     setSavedGame((prev) => ({ ...prev, [gameId]: false }))
   }
 
+  const handlePenaltyChange = (gameId: string, side: 'casa' | 'fora', value: string) => {
+    setPenalties((prev) => ({ ...prev, [gameId]: { ...prev[gameId], [side]: value } }))
+    setSavedGame((prev) => ({ ...prev, [gameId]: false }))
+  }
+
   const handleSaveResult = async (gameId: string) => {
     const result = results[gameId]
     if (!result || result.casa === '' || result.fora === '') {
@@ -137,17 +143,33 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
     }
     setSavingGame((prev) => ({ ...prev, [gameId]: true }))
     setGameMsg((prev) => ({ ...prev, [gameId]: '' }))
+
+    // Include penalty data if it's a draw in a knockout game
+    const isDraw = golsCasa === golsFora
+    const penaltyData = penalties[gameId]
+    const hasPenalties = isDraw && penaltyData && penaltyData.casa !== '' && penaltyData.fora !== ''
+    const penaltisPayload = hasPenalties
+      ? { penaltis_casa: parseInt(penaltyData.casa), penaltis_fora: parseInt(penaltyData.fora) }
+      : { penaltis_casa: null, penaltis_fora: null }
+
     const response = await fetch('/api/admin/update-result', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game_id: gameId, gols_casa_real: golsCasa, gols_fora_real: golsFora }),
+      body: JSON.stringify({ game_id: gameId, gols_casa_real: golsCasa, gols_fora_real: golsFora, ...penaltisPayload }),
     })
     setSavingGame((prev) => ({ ...prev, [gameId]: false }))
     if (response.ok) {
       setSavedGame((prev) => ({ ...prev, [gameId]: true }))
       setGameMsg((prev) => ({ ...prev, [gameId]: '✓ Resultado salvo e pontos calculados!' }))
       setLocalGames((prev) =>
-        prev.map((g) => g.id === gameId ? { ...g, resultado_lancado: true, gols_casa_real: golsCasa, gols_fora_real: golsFora } : g)
+        prev.map((g) => g.id === gameId ? {
+          ...g,
+          resultado_lancado: true,
+          gols_casa_real: golsCasa,
+          gols_fora_real: golsFora,
+          penaltis_casa: hasPenalties ? parseInt(penaltyData.casa) : null,
+          penaltis_fora: hasPenalties ? parseInt(penaltyData.fora) : null,
+        } : g)
       )
     } else {
       const data = await response.json()
@@ -260,6 +282,14 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
     return { casa: '', fora: '' }
   }
 
+  const getInitialPenalty = (game: Game) => {
+    if (penalties[game.id]) return penalties[game.id]
+    if (game.penaltis_casa !== null && game.penaltis_fora !== null) {
+      return { casa: game.penaltis_casa.toString(), fora: game.penaltis_fora.toString() }
+    }
+    return { casa: '', fora: '' }
+  }
+
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   })
@@ -286,10 +316,17 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
 
   const renderResultRow = (game: Game) => {
     const result = getInitialResult(game)
+    const penalty = getInitialPenalty(game)
     const isSaving = savingGame[game.id]
     const isSaved = savedGame[game.id]
     const msg = gameMsg[game.id]
     const isPending = !game.resultado_lancado && new Date(game.data_hora) < now
+    const isKnockout = game.fase !== 'grupos'
+
+    // Current scores (from local state or loaded values)
+    const currentCasa = results[game.id]?.casa ?? result.casa
+    const currentFora = results[game.id]?.fora ?? result.fora
+    const isDraw = currentCasa !== '' && currentFora !== '' && currentCasa === currentFora
 
     return (
       <div key={game.id}
@@ -312,26 +349,57 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
               <span>{game.time_fora} {game.bandeira_fora}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <input type="number" min="0" max="99"
-              value={results[game.id]?.casa ?? result.casa}
-              onChange={(e) => handleResultChange(game.id, 'casa', e.target.value)}
-              className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="-"
-            />
-            <span className="font-bold text-gray-400">×</span>
-            <input type="number" min="0" max="99"
-              value={results[game.id]?.fora ?? result.fora}
-              onChange={(e) => handleResultChange(game.id, 'fora', e.target.value)}
-              className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="-"
-            />
-            <button onClick={() => handleSaveResult(game.id)} disabled={isSaving}
-              className={`text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50 ${
-                isPending ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-700 hover:bg-green-800'
-              }`}>
-              {isSaving ? '...' : game.resultado_lancado ? 'Atualizar' : 'Lançar'}
-            </button>
+          <div className="flex flex-col gap-2 items-end">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 mr-1">90min</span>
+              <input type="number" min="0" max="99"
+                value={currentCasa}
+                onChange={(e) => handleResultChange(game.id, 'casa', e.target.value)}
+                className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="-"
+              />
+              <span className="font-bold text-gray-400">×</span>
+              <input type="number" min="0" max="99"
+                value={currentFora}
+                onChange={(e) => handleResultChange(game.id, 'fora', e.target.value)}
+                className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="-"
+              />
+              <button onClick={() => handleSaveResult(game.id)} disabled={isSaving}
+                className={`text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50 ${
+                  isPending ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-700 hover:bg-green-800'
+                }`}>
+                {isSaving ? '...' : game.resultado_lancado ? 'Atualizar' : 'Lançar'}
+              </button>
+            </div>
+
+            {/* Penalty inputs — only for knockout games when it's a draw */}
+            {isKnockout && isDraw && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-blue-600 font-semibold mr-1">Pênaltis</span>
+                <input type="number" min="0" max="99"
+                  value={penalties[game.id]?.casa ?? penalty.casa}
+                  onChange={(e) => handlePenaltyChange(game.id, 'casa', e.target.value)}
+                  className="w-14 h-9 text-center text-base font-bold border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="-"
+                />
+                <span className="font-bold text-gray-400">×</span>
+                <input type="number" min="0" max="99"
+                  value={penalties[game.id]?.fora ?? penalty.fora}
+                  onChange={(e) => handlePenaltyChange(game.id, 'fora', e.target.value)}
+                  className="w-14 h-9 text-center text-base font-bold border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="-"
+                />
+                <span className="text-xs text-gray-400 italic">(opcional)</span>
+              </div>
+            )}
+
+            {/* Show saved penalty result */}
+            {isKnockout && !isDraw && game.penaltis_casa !== null && game.penaltis_fora !== null && (
+              <div className="text-xs text-blue-600 font-semibold">
+                Pênaltis: {game.penaltis_casa} × {game.penaltis_fora}
+              </div>
+            )}
           </div>
         </div>
         {msg && (

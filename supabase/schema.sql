@@ -25,9 +25,15 @@ CREATE TABLE public.games (
   bandeira_fora TEXT,
   gols_casa_real INTEGER,
   gols_fora_real INTEGER,
+  penaltis_casa INTEGER,
+  penaltis_fora INTEGER,
   resultado_lancado BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: add penalty columns if upgrading an existing database
+-- ALTER TABLE public.games ADD COLUMN IF NOT EXISTS penaltis_casa INTEGER;
+-- ALTER TABLE public.games ADD COLUMN IF NOT EXISTS penaltis_fora INTEGER;
 
 -- Predictions table
 CREATE TABLE public.predictions (

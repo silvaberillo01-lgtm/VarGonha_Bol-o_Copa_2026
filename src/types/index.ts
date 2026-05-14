@@ -22,6 +22,8 @@ export interface Game {
   bandeira_fora: string | null
   gols_casa_real: number | null
   gols_fora_real: number | null
+  penaltis_casa: number | null
+  penaltis_fora: number | null
   resultado_lancado: boolean
   created_at: string
 }

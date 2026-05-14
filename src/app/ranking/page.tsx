@@ -114,12 +114,106 @@ export default async function RankingPage() {
     return `${pos + 1}º`
   }
 
+  const totalParticipants = ranking.length
+  const prizePool = totalParticipants * 40
+  const prize1st = Math.floor(prizePool * 0.70)
+  const prize2nd = Math.floor(prizePool * 0.20)
+  const prize3rd = prizePool - prize1st - prize2nd
+
+  const podium = ranking.slice(0, 3)
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar profile={profile as Profile} />
       <main className="max-w-4xl mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold text-green-800 mb-6">📊 Ranking Geral</h1>
 
+        {/* Podium */}
+        {podium.length >= 1 && (
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-bold text-gray-700 mb-5 text-center">🏆 Pódio Atual</h2>
+            <div className="flex items-end justify-center gap-4">
+              {/* 2nd place */}
+              {podium[1] && (
+                <div className="flex flex-col items-center flex-1 max-w-[140px]">
+                  <div className="text-3xl mb-1">🥈</div>
+                  <div className="w-full bg-gray-100 rounded-t-xl pt-6 pb-3 px-2 text-center">
+                    <div className="font-bold text-gray-800 text-sm truncate">{podium[1].nome}</div>
+                    <div className="text-green-700 font-bold text-lg">{podium[1].total_pontos} pts</div>
+                    <div className="text-xs text-gray-400 mt-1">2º lugar</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1st place — taller */}
+              <div className="flex flex-col items-center flex-1 max-w-[160px]">
+                <div className="text-4xl mb-1">🥇</div>
+                <div className="w-full bg-yellow-50 border-2 border-yellow-300 rounded-t-xl pt-8 pb-3 px-2 text-center">
+                  <div className="font-bold text-gray-900 text-sm truncate">{podium[0].nome}</div>
+                  <div className="text-green-700 font-bold text-xl">{podium[0].total_pontos} pts</div>
+                  <div className="text-xs text-yellow-600 font-semibold mt-1">1º lugar</div>
+                </div>
+              </div>
+
+              {/* 3rd place */}
+              {podium[2] && (
+                <div className="flex flex-col items-center flex-1 max-w-[140px]">
+                  <div className="text-3xl mb-1">🥉</div>
+                  <div className="w-full bg-orange-50 rounded-t-xl pt-4 pb-3 px-2 text-center">
+                    <div className="font-bold text-gray-800 text-sm truncate">{podium[2].nome}</div>
+                    <div className="text-green-700 font-bold text-lg">{podium[2].total_pontos} pts</div>
+                    <div className="text-xs text-gray-400 mt-1">3º lugar</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Prize pool */}
+        {totalParticipants > 0 && (
+          <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
+            <h2 className="text-lg font-bold text-gray-700 mb-4">💰 Premiação</h2>
+            <div className="text-sm text-gray-500 mb-4">
+              <span className="font-medium text-gray-700">{totalParticipants} participantes</span> × R$ 40,00 = {' '}
+              <span className="font-bold text-green-700 text-base">R$ {prizePool.toFixed(2).replace('.', ',')}</span> no bolão
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">🥇</div>
+                <div className="text-xs text-gray-500 mb-1">1º Lugar · 70%</div>
+                <div className="font-bold text-green-700 text-xl">
+                  R$ {prize1st.toFixed(2).replace('.', ',')}
+                </div>
+                {podium[0] && (
+                  <div className="text-xs text-gray-600 mt-1 truncate">{podium[0].nome}</div>
+                )}
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">🥈</div>
+                <div className="text-xs text-gray-500 mb-1">2º Lugar · 20%</div>
+                <div className="font-bold text-green-700 text-xl">
+                  R$ {prize2nd.toFixed(2).replace('.', ',')}
+                </div>
+                {podium[1] && (
+                  <div className="text-xs text-gray-600 mt-1 truncate">{podium[1].nome}</div>
+                )}
+              </div>
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                <div className="text-2xl mb-1">🥉</div>
+                <div className="text-xs text-gray-500 mb-1">3º Lugar · 10%</div>
+                <div className="font-bold text-green-700 text-xl">
+                  R$ {prize3rd.toFixed(2).replace('.', ',')}
+                </div>
+                {podium[2] && (
+                  <div className="text-xs text-gray-600 mt-1 truncate">{podium[2].nome}</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Full ranking table */}
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
