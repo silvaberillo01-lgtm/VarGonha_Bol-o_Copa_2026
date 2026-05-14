@@ -125,7 +125,7 @@ export default function DashboardClient({ games, predictions, userId }: Props) {
         className={`bg-white rounded-xl shadow-sm border-2 p-5 transition-all ${
           game.resultado_lancado ? 'border-gray-200'
             : isLocked ? 'border-gray-200'
-            : existingPred ? 'border-green-300'
+            : (existingPred || isSaved) ? 'border-green-300'
             : 'border-yellow-300'
         }`}
       >
@@ -136,7 +136,7 @@ export default function DashboardClient({ games, predictions, userId }: Props) {
           </span>
           {isLocked ? (
             <span className="text-xs text-gray-400">🔒 Bloqueado</span>
-          ) : existingPred ? (
+          ) : (existingPred || isSaved) ? (
             <span className="text-xs text-green-600">✓ Salvo</span>
           ) : (
             <span className="text-xs text-yellow-600">● Pendente</span>
@@ -219,7 +219,7 @@ export default function DashboardClient({ games, predictions, userId }: Props) {
               : <span />}
             <button onClick={() => handleSave(game.id)} disabled={isSaving}
               className="ml-auto bg-green-600 hover:bg-green-700 text-white text-sm font-bold px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
-              {isSaving ? 'Salvando...' : existingPred ? 'Atualizar' : 'Salvar'}
+              {isSaving ? 'Salvando...' : (existingPred || isSaved) ? 'Atualizar' : 'Salvar'}
             </button>
           </div>
         )}
