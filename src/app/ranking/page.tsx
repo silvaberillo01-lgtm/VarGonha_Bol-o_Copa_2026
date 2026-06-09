@@ -23,22 +23,7 @@ export default async function RankingPage() {
     redirect('/dashboard')
   }
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, nome')
-    .eq('status', 'approved')
-
-  const { data: predictions } = await supabase
-    .from('predictions')
-    .select('user_id, pontos')
-
-  const { data: championPreds } = await supabase
-    .from('champion_predictions')
-    .select('user_id, pontos')
-
-  const { data: specialPreds } = await supabase
-    .from('special_predictions')
-    .select('user_id, pontos')
+  const { data: rankingRows } = await supabase.rpc('get_ranking')
 
   const { data: configRows } = await supabase
     .from('copa_config')
@@ -64,43 +49,19 @@ export default async function RankingPage() {
     total_palpites: number
   }
 
-  const rankMap: Record<string, RankEntry> = {}
+  // A agregação é feita no banco (função get_ranking) para evitar o teto de
+  // 1000 linhas do PostgREST, que truncava os palpites e zerava o ranking.
+  const ranking: RankEntry[] = (rankingRows || []).map((r: Record<string, unknown>) => ({
+    user_id: r.user_id as string,
+    nome: r.nome as string,
+    total_pontos: Number(r.total_pontos ?? 0),
+    acertos_exatos: Number(r.acertos_exatos ?? 0),
+    acertos_resultado: Number(r.acertos_resultado ?? 0),
+    acertos_parciais: Number(r.acertos_parciais ?? 0),
+    total_palpites: Number(r.total_palpites ?? 0),
+  }))
 
-  profiles?.forEach((p) => {
-    rankMap[p.id] = {
-      user_id: p.id,
-      nome: p.nome,
-      total_pontos: 0,
-      acertos_exatos: 0,
-      acertos_resultado: 0,
-      acertos_parciais: 0,
-      total_palpites: 0,
-    }
-  })
-
-  predictions?.forEach((pred) => {
-    if (rankMap[pred.user_id]) {
-      rankMap[pred.user_id].total_pontos += pred.pontos || 0
-      rankMap[pred.user_id].total_palpites += 1
-      if (pred.pontos === 15) rankMap[pred.user_id].acertos_exatos += 1
-      else if (pred.pontos === 10) rankMap[pred.user_id].acertos_resultado += 1
-      else if (pred.pontos === 5) rankMap[pred.user_id].acertos_parciais += 1
-    }
-  })
-
-  championPreds?.forEach((cp) => {
-    if (rankMap[cp.user_id]) {
-      rankMap[cp.user_id].total_pontos += cp.pontos || 0
-    }
-  })
-
-  specialPreds?.forEach((sp) => {
-    if (rankMap[sp.user_id]) {
-      rankMap[sp.user_id].total_pontos += sp.pontos || 0
-    }
-  })
-
-  const ranking = Object.values(rankMap).sort((a, b) => {
+  ranking.sort((a, b) => {
     if (b.total_pontos !== a.total_pontos) return b.total_pontos - a.total_pontos
     if (b.acertos_exatos !== a.acertos_exatos) return b.acertos_exatos - a.acertos_exatos
     if (b.acertos_resultado !== a.acertos_resultado) return b.acertos_resultado - a.acertos_resultado

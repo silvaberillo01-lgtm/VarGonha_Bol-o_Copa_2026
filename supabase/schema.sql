@@ -179,6 +179,53 @@ CREATE POLICY "Authenticated users can view config"
   ON public.copa_config FOR SELECT
   USING (auth.role() = 'authenticated');
 
+-- Ranking agregado no banco (evita o teto de 1000 linhas do PostgREST).
+-- Retorna uma linha por participante aprovado, já com a soma dos pontos.
+CREATE OR REPLACE FUNCTION public.get_ranking()
+RETURNS TABLE (
+  user_id UUID,
+  nome TEXT,
+  total_pontos BIGINT,
+  acertos_exatos BIGINT,
+  acertos_resultado BIGINT,
+  acertos_parciais BIGINT,
+  total_palpites BIGINT
+)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT
+    pr.id AS user_id,
+    pr.nome,
+    (COALESCE(p.total_pontos, 0) + COALESCE(cp.pontos, 0) + COALESCE(sp.total_pontos, 0))::BIGINT AS total_pontos,
+    COALESCE(p.exatos, 0)::BIGINT AS acertos_exatos,
+    COALESCE(p.resultado, 0)::BIGINT AS acertos_resultado,
+    COALESCE(p.parciais, 0)::BIGINT AS acertos_parciais,
+    COALESCE(p.total_palpites, 0)::BIGINT AS total_palpites
+  FROM public.profiles pr
+  LEFT JOIN (
+    SELECT user_id,
+      SUM(pontos) AS total_pontos,
+      COUNT(*) AS total_palpites,
+      COUNT(*) FILTER (WHERE pontos = 15) AS exatos,
+      COUNT(*) FILTER (WHERE pontos = 10) AS resultado,
+      COUNT(*) FILTER (WHERE pontos = 5) AS parciais
+    FROM public.predictions
+    GROUP BY user_id
+  ) p ON p.user_id = pr.id
+  LEFT JOIN public.champion_predictions cp ON cp.user_id = pr.id
+  LEFT JOIN (
+    SELECT user_id, SUM(pontos) AS total_pontos
+    FROM public.special_predictions
+    GROUP BY user_id
+  ) sp ON sp.user_id = pr.id
+  WHERE pr.status = 'approved'
+  ORDER BY total_pontos DESC;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_ranking() TO authenticated;
+
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
