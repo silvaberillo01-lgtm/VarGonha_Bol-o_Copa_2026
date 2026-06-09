@@ -27,15 +27,26 @@ const KNOCKOUT_FASES = [
   { key: 'final', label: 'Final' },
 ]
 
+interface SpecialEntry {
+  id: string
+  user_id: string
+  tipo: 'artilheiro' | 'melhor_jogador'
+  palpite: string
+  pontos: number
+  acertou: boolean | null
+  nome: string
+}
+
 interface Props {
   users: Profile[]
   games: Game[]
   copaConfig: Record<string, string>
+  specialPredictions: SpecialEntry[]
 }
 
 type Tab = 'users' | 'results' | 'knockout' | 'especiais'
 
-export default function AdminClient({ users, games, copaConfig }: Props) {
+export default function AdminClient({ users, games, copaConfig, specialPredictions }: Props) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>('users')
   const [localUsers, setLocalUsers] = useState<Profile[]>(users)
@@ -81,6 +92,10 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
   const [savingLista, setSavingLista] = useState(false)
   const [listaMsg, setListaMsg] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Marcação manual dos especiais
+  const [localSpecials, setLocalSpecials] = useState<SpecialEntry[]>(specialPredictions)
+  const [markingSpecial, setMarkingSpecial] = useState<Record<string, boolean>>({})
 
   const now = new Date()
 
@@ -204,7 +219,6 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
     const setSaving = tipo === 'artilheiro' ? setSavingArtilheiro : setSavingMelhorJogador
     const setMsg = tipo === 'artilheiro' ? setArtilheiroMsg : setMelhorJogadorMsg
 
-    if (!resultado.trim()) { setMsg('Informe o nome.'); return }
     setSaving(true)
     setMsg('')
     const response = await fetch('/api/admin/set-special', {
@@ -214,7 +228,7 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
     })
     setSaving(false)
     if (response.ok) {
-      setMsg('✓ Resultado salvo e pontos calculados!')
+      setMsg('✓ Pontuação salva! Marque os acertos manualmente abaixo.')
     } else {
       const data = await response.json()
       setMsg(data.error || 'Erro ao salvar.')
@@ -236,6 +250,25 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
       setListaMsg(`✓ Lista salva com ${lista.length} jogadores!`)
     } else {
       setListaMsg('Erro ao salvar lista.')
+    }
+  }
+
+  const handleMarkSpecial = async (id: string, acertou: boolean) => {
+    setMarkingSpecial((prev) => ({ ...prev, [id]: true }))
+    const response = await fetch('/api/admin/mark-special', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prediction_id: id, acertou }),
+    })
+    setMarkingSpecial((prev) => ({ ...prev, [id]: false }))
+    if (response.ok) {
+      const { pontos } = await response.json()
+      setLocalSpecials((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, acertou, pontos } : s))
+      )
+    } else {
+      const data = await response.json()
+      alert(data.error || 'Erro ao marcar palpite.')
     }
   }
 
@@ -263,6 +296,64 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
   const formatDate = (dateStr: string) => new Date(dateStr).toLocaleDateString('pt-BR', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   })
+
+  const renderSpecialMarking = (tipo: 'artilheiro' | 'melhor_jogador') => {
+    const entries = localSpecials
+      .filter((s) => s.tipo === tipo)
+      .sort((a, b) => a.nome.localeCompare(b.nome))
+
+    if (entries.length === 0) {
+      return <p className="text-sm text-gray-400 mt-4">Nenhum palpite enviado ainda.</p>
+    }
+
+    const avaliados = entries.filter((e) => e.acertou !== null).length
+
+    return (
+      <div className="mt-4 border-t pt-4">
+        <p className="text-xs font-semibold text-gray-600 mb-2">
+          Conferência manual — {avaliados}/{entries.length} avaliados
+        </p>
+        <div className="space-y-2">
+          {entries.map((e) => (
+            <div key={e.id} className="flex items-center justify-between gap-3 flex-wrap bg-gray-50 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <span className="text-sm font-medium text-gray-800">{e.nome}</span>
+                <span className="text-sm text-gray-500"> — palpitou: </span>
+                <span className="text-sm font-semibold text-gray-700">{e.palpite}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {e.acertou === true && (
+                  <span className="text-xs font-bold text-green-700">✓ acerto (+{e.pontos})</span>
+                )}
+                {e.acertou === false && (
+                  <span className="text-xs font-bold text-red-600">✗ errou</span>
+                )}
+                {e.acertou === null && (
+                  <span className="text-xs text-gray-400">não avaliado</span>
+                )}
+                <button
+                  onClick={() => handleMarkSpecial(e.id, true)}
+                  disabled={markingSpecial[e.id]}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 ${
+                    e.acertou === true ? 'bg-green-600 text-white' : 'bg-white border border-green-300 text-green-700 hover:bg-green-50'
+                  }`}>
+                  Acerto
+                </button>
+                <button
+                  onClick={() => handleMarkSpecial(e.id, false)}
+                  disabled={markingSpecial[e.id]}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 ${
+                    e.acertou === false ? 'bg-red-500 text-white' : 'bg-white border border-red-300 text-red-600 hover:bg-red-50'
+                  }`}>
+                  Errou
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   const pendingUsers = localUsers.filter((u) => u.status === 'pending')
   const approvedUsers = localUsers.filter((u) => u.status === 'approved')
@@ -636,7 +727,8 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-green-800 mb-1">⚽ Artilheiro da Copa</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Informe o nome do artilheiro e a pontuação para quem acertar.
+              Defina a pontuação para quem acertar. A conferência é <strong>manual</strong>:
+              marque cada palpite abaixo como acerto ou erro. (O nome oficial é opcional, só para referência.)
             </p>
             <div className="flex items-center gap-3 flex-wrap">
               <input type="text" placeholder="Nome do artilheiro" value={artilheiroResult}
@@ -658,13 +750,15 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
             {artilheiroMsg && (
               <p className={`text-sm mt-2 ${artilheiroMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{artilheiroMsg}</p>
             )}
+            {renderSpecialMarking('artilheiro')}
           </div>
 
           {/* Melhor Jogador */}
           <div className="bg-white rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-green-800 mb-1">🌟 Melhor Jogador da Copa</h2>
             <p className="text-sm text-gray-500 mb-4">
-              Informe o nome do melhor jogador e a pontuação para quem acertar.
+              Defina a pontuação para quem acertar. A conferência é <strong>manual</strong>:
+              marque cada palpite abaixo como acerto ou erro. (O nome oficial é opcional, só para referência.)
             </p>
             <div className="flex items-center gap-3 flex-wrap">
               <input type="text" placeholder="Nome do melhor jogador" value={melhorJogadorResult}
@@ -686,6 +780,7 @@ export default function AdminClient({ users, games, copaConfig }: Props) {
             {melhorJogadorMsg && (
               <p className={`text-sm mt-2 ${melhorJogadorMsg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{melhorJogadorMsg}</p>
             )}
+            {renderSpecialMarking('melhor_jogador')}
           </div>
 
           {/* Lista de Jogadores */}

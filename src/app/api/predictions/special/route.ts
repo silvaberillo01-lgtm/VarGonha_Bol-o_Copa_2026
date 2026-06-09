@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const { error } = await adminSupabase
     .from('special_predictions')
     .upsert(
-      { user_id: user.id, tipo, palpite: palpite.trim(), pontos: 0 },
+      { user_id: user.id, tipo, palpite: palpite.trim(), pontos: 0, acertou: null },
       { onConflict: 'user_id,tipo' }
     )
 

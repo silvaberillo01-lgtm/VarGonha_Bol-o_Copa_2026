@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     })
   }
 
-  if (!tipo || !resultado) {
+  if (!tipo) {
     return NextResponse.json({ success: true })
   }
 
@@ -38,34 +38,35 @@ export async function POST(request: Request) {
 
   const pontosNum = parseInt(pontos) || 50
 
-  // Save result in copa_config
-  await adminSupabase.from('copa_config').upsert({
-    key: tipo,
-    value: resultado,
-    updated_at: new Date().toISOString(),
-  })
-
+  // Save points value for this tipo
   await adminSupabase.from('copa_config').upsert({
     key: `${tipo}_pontos`,
     value: pontosNum.toString(),
     updated_at: new Date().toISOString(),
   })
 
-  // Auto-calculate points for matching predictions
-  const { data: predictions } = await adminSupabase
-    .from('special_predictions')
-    .select('id, palpite')
-    .eq('tipo', tipo)
-
-  if (predictions && predictions.length > 0) {
-    for (const pred of predictions) {
-      const earned = pred.palpite.toLowerCase().trim() === resultado.toLowerCase().trim() ? pontosNum : 0
-      await adminSupabase
-        .from('special_predictions')
-        .update({ pontos: earned })
-        .eq('id', pred.id)
-    }
+  // Save official result name (informativo — a avaliação é manual)
+  if (resultado !== undefined && resultado !== null) {
+    await adminSupabase.from('copa_config').upsert({
+      key: tipo,
+      value: resultado,
+      updated_at: new Date().toISOString(),
+    })
   }
+
+  // Recalcula a pontuação SEM auto-validar: respeita a marcação manual (acertou).
+  // Quem foi marcado como acerto recebe a pontuação atual; os demais ficam com 0.
+  await adminSupabase
+    .from('special_predictions')
+    .update({ pontos: pontosNum })
+    .eq('tipo', tipo)
+    .eq('acertou', true)
+
+  await adminSupabase
+    .from('special_predictions')
+    .update({ pontos: 0 })
+    .eq('tipo', tipo)
+    .or('acertou.is.null,acertou.eq.false')
 
   return NextResponse.json({ success: true })
 }
