@@ -45,6 +45,23 @@ export default async function AdminPage() {
     }
   }
 
+  const { data: specialRows } = await supabase
+    .from('special_predictions')
+    .select('id, user_id, tipo, palpite, pontos, acertou, profiles(nome)')
+
+  const specialPredictions = (specialRows || []).map((r) => {
+    const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles
+    return {
+      id: r.id as string,
+      user_id: r.user_id as string,
+      tipo: r.tipo as 'artilheiro' | 'melhor_jogador',
+      palpite: r.palpite as string,
+      pontos: (r.pontos as number) ?? 0,
+      acertou: (r.acertou as boolean | null) ?? null,
+      nome: (prof as { nome?: string } | null)?.nome ?? 'Participante',
+    }
+  })
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar profile={profile as Profile} />
@@ -54,6 +71,7 @@ export default async function AdminPage() {
           users={(users || []) as Profile[]}
           games={(games || []) as Game[]}
           copaConfig={copaConfig}
+          specialPredictions={specialPredictions}
         />
       </main>
     </div>

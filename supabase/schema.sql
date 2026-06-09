@@ -15,7 +15,7 @@ CREATE TABLE public.profiles (
 -- Games table
 CREATE TABLE public.games (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  fase TEXT NOT NULL DEFAULT 'grupos' CHECK (fase IN ('grupos', 'oitavas', 'quartas', 'semi', 'final', 'terceiro')),
+  fase TEXT NOT NULL DEFAULT 'grupos' CHECK (fase IN ('grupos', 'fase32', 'oitavas', 'quartas', 'semis', 'terceiro', 'final')),
   grupo TEXT,
   rodada INTEGER,
   data_hora TIMESTAMPTZ NOT NULL,
@@ -52,12 +52,35 @@ CREATE TABLE public.champion_predictions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Special predictions table (artilheiro / melhor jogador)
+-- Avaliação MANUAL pelo admin: a coluna "acertou" guarda a decisão (NULL = ainda não avaliado).
+CREATE TABLE public.special_predictions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  tipo TEXT NOT NULL CHECK (tipo IN ('artilheiro', 'melhor_jogador')),
+  palpite TEXT NOT NULL,
+  pontos INTEGER DEFAULT 0,
+  acertou BOOLEAN,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, tipo)
+);
+
+-- Generic config store (campeão oficial, pontuação dos especiais, lista de jogadores, etc.)
+CREATE TABLE public.copa_config (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- RLS Policies
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.games ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.champion_predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.special_predictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.copa_config ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Users can view approved profiles and own profile"
@@ -92,11 +115,11 @@ CREATE POLICY "Only admins can insert/update games"
   ));
 
 -- Predictions policies
-CREATE POLICY "Users can view own predictions and approved users can view all after deadline"
+CREATE POLICY "Approved users can view all predictions"
   ON public.predictions FOR SELECT
   USING (
     auth.uid() = user_id OR
-    EXISTS(SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = TRUE)
+    EXISTS(SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (status = 'approved' OR is_admin = TRUE))
   );
 
 CREATE POLICY "Users can insert own predictions"
@@ -131,6 +154,30 @@ CREATE POLICY "Users can update own champion prediction"
     auth.uid() = user_id AND
     EXISTS(SELECT 1 FROM public.profiles WHERE id = auth.uid() AND status = 'approved')
   );
+
+-- Special predictions policies
+CREATE POLICY "Authenticated users can view all special predictions"
+  ON public.special_predictions FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can insert own special prediction"
+  ON public.special_predictions FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id AND
+    EXISTS(SELECT 1 FROM public.profiles WHERE id = auth.uid() AND status = 'approved')
+  );
+
+CREATE POLICY "Users can update own special prediction"
+  ON public.special_predictions FOR UPDATE
+  USING (
+    auth.uid() = user_id AND
+    EXISTS(SELECT 1 FROM public.profiles WHERE id = auth.uid() AND status = 'approved')
+  );
+
+-- Copa config policies (leitura para autenticados; escrita feita via service role no backend)
+CREATE POLICY "Authenticated users can view config"
+  ON public.copa_config FOR SELECT
+  USING (auth.role() = 'authenticated');
 
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()

@@ -52,7 +52,9 @@ export interface SpecialPrediction {
   tipo: 'artilheiro' | 'melhor_jogador'
   palpite: string
   pontos: number
+  acertou: boolean | null
   created_at: string
+  updated_at?: string
 }
 
 export interface RankingEntry {
