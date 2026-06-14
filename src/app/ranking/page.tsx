@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import Navbar from '@/components/Navbar'
 import { Profile } from '@/types'
 
@@ -79,7 +80,10 @@ export default async function RankingPage() {
     <div className="min-h-screen bg-gray-50">
       <Navbar profile={profile as Profile} />
       <main className="max-w-4xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-green-800 mb-6">📊 Ranking Geral</h1>
+        <h1 className="text-2xl font-bold text-green-800 mb-1">📊 Ranking Geral</h1>
+        <p className="text-gray-500 text-sm mb-6">
+          💡 Clique no nome de um participante para ver os palpites dele (visíveis após o bloqueio).
+        </p>
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -116,7 +120,12 @@ export default async function RankingPage() {
                           {getMedalha(idx)}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-semibold text-gray-800">{entry.nome}</span>
+                          <Link
+                            href={`/participante/${entry.user_id}`}
+                            className="font-semibold text-green-700 hover:text-green-900 hover:underline"
+                          >
+                            {entry.nome}
+                          </Link>
                           {isMe && (
                             <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                               você

@@ -52,6 +52,12 @@ export default function Navbar({ profile }: NavbarProps) {
             >
               📊 Ranking
             </Link>
+            <Link
+              href="/palpites"
+              className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              👁️ Palpites
+            </Link>
             {profile.is_admin && (
               <Link
                 href="/admin"
@@ -86,6 +92,9 @@ export default function Navbar({ profile }: NavbarProps) {
           </Link>
           <Link href="/ranking" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
             📊 Ranking
+          </Link>
+          <Link href="/palpites" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
+            👁️ Palpites
           </Link>
           {profile.is_admin && (
             <Link href="/admin" className="text-orange-300 hover:text-orange-400 px-3 py-1.5 rounded text-sm font-medium">
