@@ -6,6 +6,8 @@ import {
   generateShareCard,
   downloadCanvas,
   copyCanvasToClipboard,
+  canShareImage,
+  shareCanvas,
 } from '@/lib/shareCard'
 
 interface Props {
@@ -13,19 +15,32 @@ interface Props {
   label?: string
   className?: string
   filename?: string
+  shareText?: string
 }
 
-export default function ShareCardButton({ spec, label = '📲 Compartilhar', className, filename }: Props) {
+export default function ShareCardButton({
+  spec,
+  label = '📲 Compartilhar',
+  className,
+  filename,
+  shareText,
+}: Props) {
   const [open, setOpen] = useState(false)
   const [imgUrl, setImgUrl] = useState<string | null>(null)
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle')
+  const [shareMsg, setShareMsg] = useState<string>('')
+
+  const nativeShare = canShareImage()
+  const finalName = filename || `vargonha-${spec.type}.png`
+  const finalText = shareText || 'VARgonha — Bolão da Copa 2026 🏆'
 
   const handleOpen = () => {
     const c = generateShareCard(spec)
     setCanvas(c)
     setImgUrl(c.toDataURL('image/png'))
     setCopied('idle')
+    setShareMsg('')
     setOpen(true)
   }
 
@@ -33,6 +48,19 @@ export default function ShareCardButton({ spec, label = '📲 Compartilhar', cla
     setOpen(false)
     setImgUrl(null)
     setCanvas(null)
+  }
+
+  const handleShare = async () => {
+    if (!canvas) return
+    const res = await shareCanvas(canvas, finalName, finalText)
+    if (res === 'unsupported') {
+      // Sem suporte: cai pro copiar/baixar.
+      setShareMsg('Seu aparelho não abre o compartilhamento direto. Use Copiar ou Baixar.')
+    } else if (res === 'error') {
+      setShareMsg('Não rolou abrir o compartilhamento. Tente Baixar e anexar.')
+    } else {
+      setShareMsg('')
+    }
   }
 
   const handleCopy = async () => {
@@ -44,7 +72,7 @@ export default function ShareCardButton({ spec, label = '📲 Compartilhar', cla
 
   const handleDownload = () => {
     if (!canvas) return
-    downloadCanvas(canvas, filename || `vargonha-${spec.type}.png`)
+    downloadCanvas(canvas, finalName)
   }
 
   return (
@@ -80,7 +108,17 @@ export default function ShareCardButton({ spec, label = '📲 Compartilhar', cla
               <img src={imgUrl} alt="Card de compartilhamento" className="w-full rounded-xl border border-gray-200" />
             )}
 
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            {/* Botão principal: compartilhar nativo (abre WhatsApp no celular) */}
+            {nativeShare && (
+              <button
+                onClick={handleShare}
+                className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                📲 Compartilhar
+              </button>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 mt-2">
               <button
                 onClick={handleDownload}
                 className="bg-green-700 hover:bg-green-600 text-white font-semibold py-2.5 rounded-lg transition-colors"
@@ -91,16 +129,20 @@ export default function ShareCardButton({ spec, label = '📲 Compartilhar', cla
                 onClick={handleCopy}
                 className="bg-yellow-500 hover:bg-yellow-400 text-green-900 font-semibold py-2.5 rounded-lg transition-colors"
               >
-                {copied === 'ok' ? '✅ Copiado!' : copied === 'fail' ? '⬇️ Use Baixar' : '📋 Copiar imagem'}
+                {copied === 'ok' ? '✅ Copiado!' : copied === 'fail' ? '⬇️ Use Baixar' : '📋 Copiar'}
               </button>
             </div>
+
+            {shareMsg && <p className="text-xs text-red-500 mt-2 text-center">{shareMsg}</p>}
             {copied === 'fail' && (
               <p className="text-xs text-gray-500 mt-2 text-center">
                 Seu navegador não permite copiar imagem. Use o botão Baixar e anexe no WhatsApp.
               </p>
             )}
             <p className="text-xs text-gray-400 mt-3 text-center">
-              Dica: depois de baixar/copiar, é só colar na conversa do grupo 💚
+              {nativeShare
+                ? 'Toque em Compartilhar e escolha o WhatsApp 💚'
+                : 'Baixe ou copie e cole na conversa do grupo 💚'}
             </p>
           </div>
         </div>

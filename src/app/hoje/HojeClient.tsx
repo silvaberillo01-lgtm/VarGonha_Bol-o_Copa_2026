@@ -143,8 +143,41 @@ export default function HojeClient({
 
               {/* Palpites dos participantes */}
               <div className="px-4 py-3 bg-gray-50/60">
-                <div className="text-xs font-bold text-gray-500 mb-2">
-                  👥 Palpites ({preds.length})
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="text-xs font-bold text-gray-500">
+                    👥 Palpites ({preds.length})
+                  </div>
+                  {locked && preds.length > 0 && (
+                    <ShareCardButton
+                      label="📲 Compartilhar palpites"
+                      filename={`vargonha-palpites-${game.time_casa}-x-${game.time_fora}.png`}
+                      shareText={`Palpites de ${game.time_casa} x ${game.time_fora} — VARgonha 🏆`}
+                      className="inline-flex items-center gap-1 bg-green-100 hover:bg-green-200 text-green-800 text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors"
+                      spec={{
+                        type: 'jogo',
+                        timeCasa: game.time_casa,
+                        timeFora: game.time_fora,
+                        bandeiraCasa: game.bandeira_casa,
+                        bandeiraFora: game.bandeira_fora,
+                        golsCasaReal: game.gols_casa_real,
+                        golsForaReal: game.gols_fora_real,
+                        encerrado: game.resultado_lancado,
+                        statusText: `${badge.emoji} ${badge.text}`,
+                        subtitulo: `${
+                          game.fase === 'grupos' ? `Grupo ${game.grupo} • Rod. ${game.rodada} • ` : ''
+                        }${formatHora(game.data_hora)}`,
+                        palpites: preds
+                          .slice()
+                          .sort((a, b) => nomeById(a.user_id).localeCompare(nomeById(b.user_id)))
+                          .map((p) => ({
+                            nome: nomeById(p.user_id),
+                            golsCasa: p.gols_casa,
+                            golsFora: p.gols_fora,
+                            pontos: game.resultado_lancado ? p.pontos : null,
+                          })),
+                      }}
+                    />
+                  )}
                 </div>
 
                 {!locked ? (
