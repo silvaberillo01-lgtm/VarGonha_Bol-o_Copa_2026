@@ -39,10 +39,31 @@ export interface CampeaoCard {
   bandeira?: string | null
 }
 
-export type ShareSpec = PalpiteCard | RankingCard | RetrospectoCard | CampeaoCard
+export interface JogoPalpite {
+  nome: string
+  golsCasa: number
+  golsFora: number
+  pontos: number | null // null = jogo ainda não encerrado
+}
+
+export interface JogoCard {
+  type: 'jogo'
+  timeCasa: string
+  timeFora: string
+  bandeiraCasa?: string | null
+  bandeiraFora?: string | null
+  golsCasaReal?: number | null
+  golsForaReal?: number | null
+  encerrado: boolean
+  statusText: string
+  subtitulo: string // ex: "Grupo J • Rod. 1 • 01:00"
+  palpites: JogoPalpite[]
+}
+
+export type ShareSpec = PalpiteCard | RankingCard | RetrospectoCard | CampeaoCard | JogoCard
 
 const W = 1080
-const H = 1350
+const DEFAULT_H = 1350
 
 const GREEN_DARK = '#14532d'
 const GREEN = '#166534'
@@ -60,17 +81,17 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-function drawBackground(ctx: CanvasRenderingContext2D) {
-  const grad = ctx.createLinearGradient(0, 0, 0, H)
+function drawBackground(ctx: CanvasRenderingContext2D, h: number) {
+  const grad = ctx.createLinearGradient(0, 0, 0, h)
   grad.addColorStop(0, GREEN_DARK)
   grad.addColorStop(1, '#052e16')
   ctx.fillStyle = grad
-  ctx.fillRect(0, 0, W, H)
+  ctx.fillRect(0, 0, W, h)
 
   // borda decorativa
   ctx.strokeStyle = YELLOW
   ctx.lineWidth = 10
-  roundRect(ctx, 24, 24, W - 48, H - 48, 36)
+  roundRect(ctx, 24, 24, W - 48, h - 48, 36)
   ctx.stroke()
 }
 
@@ -84,11 +105,38 @@ function drawHeader(ctx: CanvasRenderingContext2D) {
   ctx.fillText('Bolão da Copa 2026', W / 2, 230)
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D, frase: string) {
+function drawFooter(ctx: CanvasRenderingContext2D, frase: string, h: number) {
   ctx.textAlign = 'center'
   ctx.fillStyle = YELLOW
   ctx.font = 'italic 600 40px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  wrapText(ctx, frase, W / 2, H - 150, W - 160, 50)
+  wrapText(ctx, frase, W / 2, h - 110, W - 160, 50)
+}
+
+// Reduz a fonte até o texto caber em maxWidth (mantém o peso/sufixo do template).
+function drawFitText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  weight: string,
+  startSize: number,
+  minSize = 28,
+) {
+  let size = startSize
+  do {
+    ctx.font = `${weight} ${size}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`
+    if (ctx.measureText(text).width <= maxWidth) break
+    size -= 4
+  } while (size > minSize)
+  ctx.fillText(text, x, y)
+}
+
+function pontosBadgeColor(pontos: number): { bg: string; fg: string } {
+  if (pontos === 15) return { bg: '#fef9c3', fg: '#a16207' }
+  if (pontos === 10) return { bg: '#dcfce7', fg: '#15803d' }
+  if (pontos === 5) return { bg: '#dbeafe', fg: '#1d4ed8' }
+  return { bg: '#fee2e2', fg: '#b91c1c' }
 }
 
 function drawNome(ctx: CanvasRenderingContext2D, nome: string, y: number) {
@@ -151,7 +199,7 @@ function drawPalpite(ctx: CanvasRenderingContext2D, c: PalpiteCard) {
   ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(`📅 ${c.dataHora}`, W / 2, 1000)
 
-  drawFooter(ctx, 'Pode cobrar depois 👀')
+  drawFooter(ctx, 'Pode cobrar depois 👀', DEFAULT_H)
 }
 
 function drawRanking(ctx: CanvasRenderingContext2D, c: RankingCard) {
@@ -175,7 +223,7 @@ function drawRanking(ctx: CanvasRenderingContext2D, c: RankingCard) {
   ctx.font = 'bold 70px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(`${c.pontos} pts`, W / 2, 870)
 
-  drawFooter(ctx, 'Esse é o meu posto no bolão 🪖')
+  drawFooter(ctx, 'Esse é o meu posto no bolão 🪖', DEFAULT_H)
 }
 
 function drawRetrospecto(ctx: CanvasRenderingContext2D, c: RetrospectoCard) {
@@ -212,7 +260,7 @@ function drawRetrospecto(ctx: CanvasRenderingContext2D, c: RetrospectoCard) {
   ctx.font = 'bold 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(`Total: ${c.pontos} pts`, W / 2, y + 30)
 
-  drawFooter(ctx, 'Tô só esquentando 🔥')
+  drawFooter(ctx, 'Tô só esquentando 🔥', DEFAULT_H)
 }
 
 function drawCampeao(ctx: CanvasRenderingContext2D, c: CampeaoCard) {
@@ -230,16 +278,112 @@ function drawCampeao(ctx: CanvasRenderingContext2D, c: CampeaoCard) {
   ctx.font = 'bold 84px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(c.selecao, W / 2, 860)
 
-  drawFooter(ctx, 'Anota aí: campeã da Copa 2026 🏆')
+  drawFooter(ctx, 'Anota aí: campeã da Copa 2026 🏆', DEFAULT_H)
+}
+
+// Layout da grade de palpites do card de jogo.
+const JOGO_TOP = 560 // onde começa a grade de palpites
+const JOGO_ROW_H = 84
+const JOGO_FOOTER = 200
+
+function jogoHeight(c: JogoCard): number {
+  const linhas = Math.ceil(c.palpites.length / 2)
+  return JOGO_TOP + Math.max(linhas, 1) * JOGO_ROW_H + JOGO_FOOTER
+}
+
+function drawJogo(ctx: CanvasRenderingContext2D, c: JogoCard, h: number) {
+  // Subtítulo (grupo / rodada / horário)
+  ctx.textAlign = 'center'
+  ctx.fillStyle = LIGHT
+  ctx.font = '600 32px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText(c.subtitulo, W / 2, 300)
+
+  // Placar / confronto numa linha que se ajusta à largura
+  const placar = c.encerrado ? `${c.golsCasaReal} × ${c.golsForaReal}` : '×'
+  const linha = `${c.bandeiraCasa || ''} ${c.timeCasa}   ${placar}   ${c.timeFora} ${c.bandeiraFora || ''}`
+  ctx.fillStyle = WHITE
+  drawFitText(ctx, linha, W / 2, 400, W - 140, 'bold', 64, 30)
+
+  // Selo de status
+  ctx.fillStyle = c.encerrado ? '#86efac' : '#fca5a5'
+  ctx.font = '700 30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText(c.statusText, W / 2, 460)
+
+  // Título da seção
+  ctx.fillStyle = YELLOW
+  ctx.font = '700 34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillText(`👥 Palpites (${c.palpites.length})`, 70, 525)
+
+  // Grade de palpites (2 colunas)
+  const margin = 70
+  const gap = 24
+  const colW = (W - margin * 2 - gap) / 2
+  const cellH = 68
+
+  c.palpites.forEach((p, i) => {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    const x = margin + col * (colW + gap)
+    const y = JOGO_TOP + row * JOGO_ROW_H
+
+    // fundo da célula
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'
+    roundRect(ctx, x, y, colW, cellH, 16)
+    ctx.fill()
+
+    // nome
+    ctx.fillStyle = WHITE
+    ctx.textAlign = 'left'
+    ctx.font = '600 32px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    const placarTxt = `${p.golsCasa}×${p.golsFora}`
+    const badgeTxt = p.pontos !== null ? `+${p.pontos}` : ''
+    // largura reservada à direita para placar+badge
+    const rightW = badgeTxt ? 200 : 130
+    let nome = p.nome
+    while (ctx.measureText(nome).width > colW - rightW - 40 && nome.length > 1) {
+      nome = nome.slice(0, -1)
+    }
+    if (nome !== p.nome) nome = nome.trimEnd() + '…'
+    ctx.fillText(nome, x + 24, y + cellH / 2 + 11)
+
+    // placar
+    ctx.textAlign = 'right'
+    ctx.fillStyle = YELLOW
+    ctx.font = 'bold 34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    const badgeX = x + colW - 20
+    const placarX = badgeTxt ? badgeX - 90 : badgeX
+    ctx.fillText(placarTxt, placarX, y + cellH / 2 + 12)
+
+    // badge de pontos
+    if (p.pontos !== null) {
+      const { bg, fg } = pontosBadgeColor(p.pontos)
+      const bw = 78
+      const bh = 40
+      const bx = x + colW - bw - 16
+      const by = y + (cellH - bh) / 2
+      ctx.fillStyle = bg
+      roundRect(ctx, bx, by, bw, bh, 12)
+      ctx.fill()
+      ctx.fillStyle = fg
+      ctx.font = 'bold 26px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(badgeTxt, bx + bw / 2, by + bh / 2 + 9)
+    }
+  })
+
+  drawFooter(ctx, c.encerrado ? 'Quem mandou bem? 👀' : 'Tá lançado, sem choro depois 😎', h)
 }
 
 export function generateShareCard(spec: ShareSpec): HTMLCanvasElement {
+  const h = spec.type === 'jogo' ? jogoHeight(spec) : DEFAULT_H
+
   const canvas = document.createElement('canvas')
   canvas.width = W
-  canvas.height = H
+  canvas.height = h
   const ctx = canvas.getContext('2d')!
 
-  drawBackground(ctx)
+  drawBackground(ctx, h)
   drawHeader(ctx)
 
   switch (spec.type) {
@@ -254,6 +398,9 @@ export function generateShareCard(spec: ShareSpec): HTMLCanvasElement {
       break
     case 'campeao':
       drawCampeao(ctx, spec)
+      break
+    case 'jogo':
+      drawJogo(ctx, spec, h)
       break
   }
 
@@ -284,5 +431,39 @@ export async function copyCanvasToClipboard(canvas: HTMLCanvasElement): Promise<
     return true
   } catch {
     return false
+  }
+}
+
+// Indica se dá pra compartilhar uma imagem pela folha nativa (WhatsApp etc.).
+export function canShareImage(): boolean {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.canShare) return false
+    const probe = new File([new Blob([''], { type: 'image/png' })], 'probe.png', { type: 'image/png' })
+    return navigator.canShare({ files: [probe] })
+  } catch {
+    return false
+  }
+}
+
+export type ShareResult = 'shared' | 'cancelled' | 'unsupported' | 'error'
+
+// Abre a folha de compartilhamento nativa do dispositivo já com a imagem
+// anexada — no celular isso inclui o WhatsApp diretamente.
+export async function shareCanvas(
+  canvas: HTMLCanvasElement,
+  filename: string,
+  texto: string,
+): Promise<ShareResult> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.share) return 'unsupported'
+    const blob = await canvasToBlob(canvas)
+    const file = new File([blob], filename, { type: 'image/png' })
+    if (navigator.canShare && !navigator.canShare({ files: [file] })) return 'unsupported'
+    await navigator.share({ files: [file], text: texto })
+    return 'shared'
+  } catch (err) {
+    // O usuário cancelar a folha de compartilhamento dispara AbortError.
+    if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled'
+    return 'error'
   }
 }
