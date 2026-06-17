@@ -1,0 +1,208 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Game, Prediction } from '@/types'
+import { getTipoAcerto } from '@/lib/scoring'
+import {
+  getGameStatus,
+  statusLabel,
+  isGameLocked,
+  formatHora,
+  formatDataLonga,
+} from '@/lib/match-utils'
+import ShareCardButton from '@/components/ShareCardButton'
+
+interface Participante {
+  id: string
+  nome: string
+}
+
+interface Props {
+  games: Game[]
+  predictions: Prediction[]
+  participantes: Participante[]
+  isToday: boolean
+  dateKey: string
+  currentUserId: string
+}
+
+export default function HojeClient({
+  games,
+  predictions,
+  participantes,
+  isToday,
+  dateKey,
+  currentUserId,
+}: Props) {
+  // "now" reativo para o status/bloqueio se atualizarem sozinhos durante o jogo.
+  const [now, setNow] = useState<Date>(new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000)
+    return () => clearInterval(id)
+  }, [])
+
+  const nomeById = (id: string) => participantes.find((p) => p.id === id)?.nome || 'Participante'
+  const predsForGame = (gameId: string) => predictions.filter((p) => p.game_id === gameId)
+
+  const firstName = (nome: string) => nome.split(' ')[0]
+
+  if (games.length === 0) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold text-green-800 mb-1">🗓️ Jogos de Hoje</h1>
+        <div className="bg-white rounded-xl shadow-sm p-10 text-center text-gray-500 mt-4">
+          <div className="text-4xl mb-3">😴</div>
+          Nenhum jogo encontrado. Volte mais perto da próxima rodada!
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-green-800 mb-1">🗓️ Jogos de Hoje</h1>
+      {isToday ? (
+        <p className="text-gray-500 text-sm mb-5 capitalize">{formatDataLonga(dateKey)}</p>
+      ) : (
+        <div className="mb-5">
+          <p className="text-orange-600 text-sm font-semibold">
+            Nenhum jogo hoje. Veja a próxima rodada:
+          </p>
+          <p className="text-gray-500 text-sm capitalize">{formatDataLonga(dateKey)}</p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {games.map((game) => {
+          const status = getGameStatus(game, now)
+          const badge = statusLabel(status)
+          const locked = isGameLocked(game, now)
+          const preds = predsForGame(game.id)
+          const myPred = preds.find((p) => p.user_id === currentUserId)
+
+          return (
+            <div key={game.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              {/* Cabeçalho do jogo */}
+              <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-gray-500 font-medium">
+                    {game.fase === 'grupos' ? `Grupo ${game.grupo} • Rod. ${game.rodada} • ` : ''}
+                    {formatHora(game.data_hora)}
+                  </span>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badge.classes}`}>
+                    {badge.emoji} {badge.text}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex-1 text-right">
+                    <div className="text-2xl leading-none">{game.bandeira_casa}</div>
+                    <div className="font-bold text-gray-800 text-sm mt-1">{game.time_casa}</div>
+                  </div>
+
+                  <div className="flex flex-col items-center min-w-[70px]">
+                    {game.resultado_lancado ? (
+                      <div className="text-3xl font-extrabold text-green-700 leading-none">
+                        {game.gols_casa_real} <span className="text-gray-300">×</span> {game.gols_fora_real}
+                      </div>
+                    ) : (
+                      <div className="text-2xl font-bold text-gray-300 leading-none">× </div>
+                    )}
+                    {game.resultado_lancado && (
+                      <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">resultado</span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 text-left">
+                    <div className="text-2xl leading-none">{game.bandeira_fora}</div>
+                    <div className="font-bold text-gray-800 text-sm mt-1">{game.time_fora}</div>
+                  </div>
+                </div>
+
+                {/* Compartilhar meu palpite (apenas o próprio, sempre permitido) */}
+                {myPred && (
+                  <div className="mt-3 flex justify-center">
+                    <ShareCardButton
+                      label="📲 Compartilhar meu palpite"
+                      filename={`vargonha-${game.time_casa}-x-${game.time_fora}.png`}
+                      spec={{
+                        type: 'palpite',
+                        nome: nomeById(currentUserId),
+                        timeCasa: game.time_casa,
+                        timeFora: game.time_fora,
+                        golsCasa: myPred.gols_casa,
+                        golsFora: myPred.gols_fora,
+                        dataHora: `${formatDataLonga(dateKey)} • ${formatHora(game.data_hora)}`,
+                        bandeiraCasa: game.bandeira_casa,
+                        bandeiraFora: game.bandeira_fora,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Palpites dos participantes */}
+              <div className="px-4 py-3 bg-gray-50/60">
+                <div className="text-xs font-bold text-gray-500 mb-2">
+                  👥 Palpites ({preds.length})
+                </div>
+
+                {!locked ? (
+                  <div className="text-xs text-gray-400 py-2 text-center">
+                    🔒 Os palpites de todos ficam visíveis quando o jogo começar.
+                  </div>
+                ) : preds.length === 0 ? (
+                  <div className="text-xs text-gray-400 py-2 text-center">Ninguém palpitou neste jogo.</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {preds
+                      .slice()
+                      .sort((a, b) => nomeById(a.user_id).localeCompare(nomeById(b.user_id)))
+                      .map((p) => {
+                        const isMe = p.user_id === currentUserId
+                        const acertou = game.resultado_lancado
+                        return (
+                          <div
+                            key={p.id}
+                            className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${
+                              isMe ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100'
+                            }`}
+                          >
+                            <span className="font-medium text-gray-700 truncate">
+                              {firstName(nomeById(p.user_id))}
+                              {isMe && <span className="text-[10px] text-green-600 ml-1">(você)</span>}
+                            </span>
+                            <span className="flex items-center gap-1 shrink-0">
+                              <span className="font-bold text-green-800">
+                                {p.gols_casa}×{p.gols_fora}
+                              </span>
+                              {acertou && (
+                                <span
+                                  title={getTipoAcerto(p.pontos)}
+                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    p.pontos === 15
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : p.pontos === 10
+                                      ? 'bg-green-100 text-green-700'
+                                      : p.pontos === 5
+                                      ? 'bg-blue-100 text-blue-700'
+                                      : 'bg-red-100 text-red-700'
+                                  }`}
+                                >
+                                  +{p.pontos}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
