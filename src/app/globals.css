@@ -11,3 +11,12 @@
 body {
   background-color: #f0f7f0;
 }
+
+/* Esconde a barra de rolagem horizontal do menu no mobile, mantendo o scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

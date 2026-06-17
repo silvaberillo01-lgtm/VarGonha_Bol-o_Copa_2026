@@ -9,6 +9,16 @@ interface NavbarProps {
   profile: Profile
 }
 
+const NAV_LINKS: { href: string; label: string }[] = [
+  { href: '/dashboard', label: '⚽ Palpitar' },
+  { href: '/hoje', label: '🗓️ Hoje' },
+  { href: '/ranking', label: '📊 Ranking' },
+  { href: '/champion', label: '🥇 Campeão' },
+  { href: '/palpites', label: '👁️ Palpites' },
+  { href: '/hall', label: '🤡 Hall' },
+  { href: '/compartilhar', label: '📲 Cards' },
+]
+
 export default function Navbar({ profile }: NavbarProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -24,7 +34,7 @@ export default function Navbar({ profile }: NavbarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
             <span className="text-2xl">🏆</span>
             <div>
               <span className="text-yellow-400 font-bold text-lg leading-none block">VARgonha</span>
@@ -32,36 +42,21 @@ export default function Navbar({ profile }: NavbarProps) {
             </div>
           </Link>
 
-          {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-1">
-            <Link
-              href="/dashboard"
-              className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              ⚽ Palpites
-            </Link>
-            <Link
-              href="/champion"
-              className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              🥇 Campeão
-            </Link>
-            <Link
-              href="/ranking"
-              className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              📊 Ranking
-            </Link>
-            <Link
-              href="/palpites"
-              className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              👁️ Palpites
-            </Link>
+          {/* Nav Links (desktop) */}
+          <div className="hidden md:flex items-center gap-1 flex-wrap justify-center">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-yellow-200 hover:text-yellow-400 hover:bg-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
+              >
+                {link.label}
+              </Link>
+            ))}
             {profile.is_admin && (
               <Link
                 href="/admin"
-                className="text-orange-300 hover:text-orange-400 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                className="text-orange-300 hover:text-orange-400 hover:bg-green-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
               >
                 ⚙️ Admin
               </Link>
@@ -69,38 +64,40 @@ export default function Navbar({ profile }: NavbarProps) {
           </div>
 
           {/* User Info + Logout */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <span className="text-green-300 text-sm hidden sm:block">
               Olá, <span className="text-yellow-300 font-semibold">{profile.nome.split(' ')[0]}</span>
             </span>
             <button
               onClick={handleLogout}
-              className="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              className="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-3 sm:px-4 py-2 rounded-lg transition-colors"
             >
               Sair
             </button>
           </div>
         </div>
 
-        {/* Mobile Nav */}
-        <div className="md:hidden flex gap-1 pb-3">
-          <Link href="/dashboard" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
-            ⚽ Palpites
-          </Link>
-          <Link href="/champion" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
-            🥇 Campeão
-          </Link>
-          <Link href="/ranking" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
-            📊 Ranking
-          </Link>
-          <Link href="/palpites" className="text-yellow-200 hover:text-yellow-400 px-3 py-1.5 rounded text-sm font-medium">
-            👁️ Palpites
-          </Link>
-          {profile.is_admin && (
-            <Link href="/admin" className="text-orange-300 hover:text-orange-400 px-3 py-1.5 rounded text-sm font-medium">
-              ⚙️ Admin
-            </Link>
-          )}
+        {/* Nav Links (mobile) — rolagem horizontal para não estourar a tela */}
+        <div className="md:hidden -mx-4 px-4 pb-3">
+          <div className="flex gap-1 overflow-x-auto no-scrollbar">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-yellow-200 hover:text-yellow-400 bg-green-700/40 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap shrink-0"
+              >
+                {link.label}
+              </Link>
+            ))}
+            {profile.is_admin && (
+              <Link
+                href="/admin"
+                className="text-orange-300 hover:text-orange-400 bg-green-700/40 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap shrink-0"
+              >
+                ⚙️ Admin
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </nav>
