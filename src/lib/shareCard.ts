@@ -298,13 +298,49 @@ function drawJogo(ctx: CanvasRenderingContext2D, c: JogoCard, h: number) {
   ctx.font = '600 32px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(c.subtitulo, W / 2, 300)
 
-  // Placar / confronto numa linha que se ajusta à largura
+  // Confronto: placar fixo no centro exato e nomes equilibrados dos dois lados,
+  // para o placar nunca sair do centro mesmo com nomes de tamanhos diferentes.
   const placar = c.encerrado ? `${c.golsCasaReal} × ${c.golsForaReal}` : '×'
-  const linha = `${c.bandeiraCasa || ''} ${c.timeCasa}   ${placar}   ${c.timeFora} ${c.bandeiraFora || ''}`
+  const confrontoY = 405
+  const gapPlacar = 34
+  const sideMargin = 70
+
+  ctx.fillStyle = YELLOW
+  ctx.textAlign = 'center'
+  ctx.font = 'bold 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText(placar, W / 2, confrontoY)
+  const scoreHalf = ctx.measureText(placar).width / 2
+  const sideMax = W / 2 - scoreHalf - gapPlacar - sideMargin
+
+  // Time da casa: alinhado à direita, terminando antes do placar
   ctx.fillStyle = WHITE
-  drawFitText(ctx, linha, W / 2, 400, W - 140, 'bold', 64, 30)
+  ctx.textAlign = 'right'
+  drawFitText(
+    ctx,
+    `${c.bandeiraCasa || ''} ${c.timeCasa}`.trim(),
+    W / 2 - scoreHalf - gapPlacar,
+    confrontoY,
+    sideMax,
+    'bold',
+    50,
+    26,
+  )
+
+  // Time visitante: alinhado à esquerda, começando depois do placar
+  ctx.textAlign = 'left'
+  drawFitText(
+    ctx,
+    `${c.timeFora} ${c.bandeiraFora || ''}`.trim(),
+    W / 2 + scoreHalf + gapPlacar,
+    confrontoY,
+    sideMax,
+    'bold',
+    50,
+    26,
+  )
 
   // Selo de status
+  ctx.textAlign = 'center'
   ctx.fillStyle = c.encerrado ? '#86efac' : '#fca5a5'
   ctx.font = '700 30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.fillText(c.statusText, W / 2, 460)

@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
-import { Game } from '@/types'
-import { getGameStatus } from '@/lib/match-utils'
 
 export interface RankEntry {
   user_id: string
@@ -18,7 +16,6 @@ export interface RankEntry {
 
 interface Props {
   initialRanking: RankEntry[]
-  games: Pick<Game, 'id' | 'data_hora' | 'resultado_lancado' | 'fase'>[]
   currentUserId: string
   artilheiroPontos: string
   melhorJogadorPontos: string
@@ -37,18 +34,15 @@ const POLL_MS = 30000
 
 export default function RankingLiveClient({
   initialRanking,
-  games,
   currentUserId,
   artilheiroPontos,
   melhorJogadorPontos,
 }: Props) {
   const supabase = createClient()
   const [ranking, setRanking] = useState<RankEntry[]>(sortRanking(initialRanking))
-  const [liveGames, setLiveGames] = useState(games)
   const [movement, setMovement] = useState<Record<string, 'up' | 'down'>>({})
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
-  const [now, setNow] = useState<Date>(new Date())
 
   // posições anteriores para calcular as setas
   const prevPositions = useRef<Record<string, number>>(
@@ -57,10 +51,7 @@ export default function RankingLiveClient({
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const [{ data: rankRows }, { data: gameRows }] = await Promise.all([
-      supabase.rpc('get_ranking'),
-      supabase.from('games').select('id, data_hora, resultado_lancado, fase'),
-    ])
+    const { data: rankRows } = await supabase.rpc('get_ranking')
 
     if (rankRows) {
       const mapped: RankEntry[] = (rankRows as Record<string, unknown>[]).map((r) => ({
@@ -88,24 +79,13 @@ export default function RankingLiveClient({
       setUpdatedAt(new Date())
     }
 
-    if (gameRows) {
-      setLiveGames(gameRows as Props['games'])
-    }
     setRefreshing(false)
   }, [supabase])
 
   useEffect(() => {
     const poll = setInterval(refresh, POLL_MS)
-    const tick = setInterval(() => setNow(new Date()), 30000)
-    return () => {
-      clearInterval(poll)
-      clearInterval(tick)
-    }
+    return () => clearInterval(poll)
   }, [refresh])
-
-  const jogosEmAndamento = liveGames.filter(
-    (g) => getGameStatus(g as Game, now) === 'em_andamento',
-  ).length
 
   const getMedalha = (pos: number) => {
     if (pos === 0) return '🥇'
@@ -127,23 +107,14 @@ export default function RankingLiveClient({
         </button>
       </div>
 
-      {/* Indicador de pontuação parcial x final */}
-      {jogosEmAndamento > 0 ? (
-        <div className="flex items-center gap-2 mb-4 text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="font-bold">AO VIVO</span>
-          <span>
-            Pontuação <strong>parcial</strong> — {jogosEmAndamento} jogo
-            {jogosEmAndamento > 1 ? 's' : ''} em andamento. Atualiza sozinho a cada 30s.
-          </span>
-        </div>
-      ) : (
-        <p className="text-gray-500 text-sm mb-4">
-          Pontuação atualizada •{' '}
-          {updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-          {' '}• 💡 clique no nome para ver os palpites.
-        </p>
-      )}
+      {/* Aviso honesto: atualiza sozinho quando o admin lança resultados */}
+      <p className="text-gray-500 text-sm mb-4">
+        🔄 Atualiza sozinho a cada 30s — a pontuação muda quando o admin lança o resultado de um
+        jogo. Última atualização às{' '}
+        {updatedAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}.
+        <br />
+        💡 Clique no nome de um participante para ver os palpites dele.
+      </p>
 
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">

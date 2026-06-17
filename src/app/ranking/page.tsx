@@ -52,18 +52,12 @@ export default async function RankingPage() {
     total_palpites: Number(r.total_palpites ?? 0),
   }))
 
-  // Jogos (apenas campos necessários) para detectar "ao vivo" no client.
-  const { data: gameRows } = await supabase
-    .from('games')
-    .select('id, data_hora, resultado_lancado, fase')
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar profile={profile as Profile} />
       <main className="max-w-4xl mx-auto px-4 py-6">
         <RankingLiveClient
           initialRanking={ranking}
-          games={gameRows || []}
           currentUserId={user.id}
           artilheiroPontos={artilheiroPontos}
           melhorJogadorPontos={melhorJogadorPontos}
