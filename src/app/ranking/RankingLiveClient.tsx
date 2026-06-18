@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Game } from '@/types'
 import { getGameStatus } from '@/lib/match-utils'
+import ShareCardButton from '@/components/ShareCardButton'
 
 export interface RankEntry {
   user_id: string
@@ -118,13 +119,36 @@ export default function RankingLiveClient({
     <div>
       <div className="flex items-start justify-between gap-3 mb-1">
         <h1 className="text-2xl font-bold text-green-800">📊 Ranking Geral</h1>
-        <button
-          onClick={refresh}
-          disabled={refreshing}
-          className="shrink-0 text-xs font-semibold bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
-        >
-          {refreshing ? '⏳' : '🔄'} Atualizar
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <ShareCardButton
+            label="📸 Compartilhar"
+            filename="vargonha-ranking.png"
+            shareText="VARgonha — Ranking do Bolão da Copa 2026 🏆"
+            className="text-xs font-semibold bg-yellow-400 hover:bg-yellow-300 text-green-900 px-3 py-1.5 rounded-lg transition-colors"
+            spec={{
+              type: 'ranking-completo',
+              entries: ranking.map((e) => ({
+                nome: e.nome,
+                total_pontos: e.total_pontos,
+                acertos_exatos: e.acertos_exatos,
+                acertos_resultado: e.acertos_resultado,
+              })),
+              timestamp: updatedAt.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            }}
+          />
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className="text-xs font-semibold bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {refreshing ? '⏳' : '🔄'} Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Indicador de pontuação parcial x final */}

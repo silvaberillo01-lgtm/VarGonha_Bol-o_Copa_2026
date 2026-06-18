@@ -60,7 +60,20 @@ export interface JogoCard {
   palpites: JogoPalpite[]
 }
 
-export type ShareSpec = PalpiteCard | RankingCard | RetrospectoCard | CampeaoCard | JogoCard
+export interface RankingCompletoEntry {
+  nome: string
+  total_pontos: number
+  acertos_exatos: number
+  acertos_resultado: number
+}
+
+export interface RankingCompletoCard {
+  type: 'ranking-completo'
+  entries: RankingCompletoEntry[]
+  timestamp: string
+}
+
+export type ShareSpec = PalpiteCard | RankingCard | RetrospectoCard | CampeaoCard | JogoCard | RankingCompletoCard
 
 const W = 1080
 const DEFAULT_H = 1350
@@ -282,9 +295,13 @@ function drawCampeao(ctx: CanvasRenderingContext2D, c: CampeaoCard) {
 }
 
 // Layout da grade de palpites do card de jogo.
-const JOGO_TOP = 560 // onde começa a grade de palpites
+const JOGO_TOP = 580 // onde começa a grade de palpites
 const JOGO_ROW_H = 84
 const JOGO_FOOTER = 200
+
+// Layout do ranking completo.
+const RANKING_COMPLETO_TOP = 415
+const RANKING_COMPLETO_ROW_H = 58
 
 function jogoHeight(c: JogoCard): number {
   const linhas = Math.ceil(c.palpites.length / 2)
@@ -292,28 +309,39 @@ function jogoHeight(c: JogoCard): number {
 }
 
 function drawJogo(ctx: CanvasRenderingContext2D, c: JogoCard, h: number) {
-  // Subtítulo (grupo / rodada / horário)
   ctx.textAlign = 'center'
+
+  // Subtítulo (grupo / rodada / horário)
   ctx.fillStyle = LIGHT
   ctx.font = '600 32px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  ctx.fillText(c.subtitulo, W / 2, 300)
+  ctx.fillText(c.subtitulo, W / 2, 282)
 
-  // Placar / confronto numa linha que se ajusta à largura
-  const placar = c.encerrado ? `${c.golsCasaReal} × ${c.golsForaReal}` : '×'
-  const linha = `${c.bandeiraCasa || ''} ${c.timeCasa}   ${placar}   ${c.timeFora} ${c.bandeiraFora || ''}`
+  // Confronto em 3 linhas separadas — evita problemas de medição de emoji no iOS.
+  // Linha 1: time da casa
   ctx.fillStyle = WHITE
-  drawFitText(ctx, linha, W / 2, 400, W - 140, 'bold', 64, 30)
+  const textCasa = `${c.bandeiraCasa || ''} ${c.timeCasa}`.trim()
+  drawFitText(ctx, textCasa, W / 2, 340, W - 140, 'bold', 54, 28)
+
+  // Linha 2: placar / × (amarelo quando encerrado para destacar)
+  const placar = c.encerrado ? `${c.golsCasaReal}  ×  ${c.golsForaReal}` : '×'
+  ctx.fillStyle = c.encerrado ? YELLOW : WHITE
+  drawFitText(ctx, placar, W / 2, 412, W - 200, 'bold', 80, 40)
+
+  // Linha 3: time de fora
+  ctx.fillStyle = WHITE
+  const textFora = `${c.timeFora} ${c.bandeiraFora || ''}`.trim()
+  drawFitText(ctx, textFora, W / 2, 470, W - 140, 'bold', 54, 28)
 
   // Selo de status
   ctx.fillStyle = c.encerrado ? '#86efac' : '#fca5a5'
   ctx.font = '700 30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-  ctx.fillText(c.statusText, W / 2, 460)
+  ctx.fillText(c.statusText, W / 2, 522)
 
   // Título da seção
   ctx.fillStyle = YELLOW
   ctx.font = '700 34px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.textAlign = 'left'
-  ctx.fillText(`👥 Palpites (${c.palpites.length})`, 70, 525)
+  ctx.fillText(`👥 Palpites (${c.palpites.length})`, 70, 556)
 
   // Grade de palpites (2 colunas)
   const margin = 70
@@ -375,8 +403,92 @@ function drawJogo(ctx: CanvasRenderingContext2D, c: JogoCard, h: number) {
   drawFooter(ctx, c.encerrado ? 'Quem mandou bem? 👀' : 'Tá lançado, sem choro depois 😎', h)
 }
 
+function rankingCompletoHeight(c: RankingCompletoCard): number {
+  return RANKING_COMPLETO_TOP + Math.max(c.entries.length, 1) * RANKING_COMPLETO_ROW_H + 130
+}
+
+function drawRankingCompleto(ctx: CanvasRenderingContext2D, c: RankingCompletoCard, h: number) {
+  const COL_POS_CX = 105
+  const COL_NAME_X = 165
+  const COL_PTS_CX = 735
+  const COL_EX_CX = 865
+  const COL_RES_CX = 992
+  const margin = 60
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = YELLOW
+  ctx.font = 'bold 50px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText('📊 Ranking do Bolão', W / 2, 290)
+
+  ctx.fillStyle = LIGHT
+  ctx.font = '500 28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText(c.timestamp, W / 2, 334)
+
+  // Cabeçalho das colunas
+  ctx.fillStyle = 'rgba(255,255,255,0.14)'
+  ctx.fillRect(margin, 352, W - margin * 2, 55)
+
+  ctx.fillStyle = YELLOW
+  ctx.font = 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('#', COL_POS_CX, 390)
+  ctx.textAlign = 'left'
+  ctx.fillText('Participante', COL_NAME_X, 390)
+  ctx.textAlign = 'center'
+  ctx.fillText('Pts', COL_PTS_CX, 390)
+  ctx.fillText('⭐', COL_EX_CX, 390)
+  ctx.fillText('✅', COL_RES_CX, 390)
+
+  // Linhas de dados
+  c.entries.forEach((entry, idx) => {
+    const rowTop = RANKING_COMPLETO_TOP + idx * RANKING_COMPLETO_ROW_H
+    const textY = rowTop + Math.round(RANKING_COMPLETO_ROW_H / 2) + 10
+
+    ctx.fillStyle = idx % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.10)'
+    ctx.fillRect(margin, rowTop, W - margin * 2, RANKING_COMPLETO_ROW_H - 1)
+
+    const pos = idx + 1
+    const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : `${pos}º`
+    ctx.textAlign = 'center'
+    ctx.fillStyle = pos <= 3 ? YELLOW : LIGHT
+    ctx.font =
+      pos <= 3
+        ? '30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+        : 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.fillText(medal, COL_POS_CX, textY)
+
+    const maxNameW = COL_PTS_CX - 65 - COL_NAME_X
+    ctx.fillStyle = WHITE
+    ctx.font = '600 27px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.textAlign = 'left'
+    let nome = entry.nome
+    while (ctx.measureText(nome).width > maxNameW && nome.length > 1) {
+      nome = nome.slice(0, -1)
+    }
+    if (nome !== entry.nome) nome = nome.trimEnd() + '…'
+    ctx.fillText(nome, COL_NAME_X, textY)
+
+    ctx.fillStyle = YELLOW
+    ctx.font = 'bold 28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(String(entry.total_pontos), COL_PTS_CX, textY)
+
+    ctx.fillStyle = LIGHT
+    ctx.font = '600 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.fillText(String(entry.acertos_exatos), COL_EX_CX, textY)
+    ctx.fillText(String(entry.acertos_resultado), COL_RES_CX, textY)
+  })
+
+  drawFooter(ctx, 'Quem tá mandando bem no bolão? 👀', h)
+}
+
 export function generateShareCard(spec: ShareSpec): HTMLCanvasElement {
-  const h = spec.type === 'jogo' ? jogoHeight(spec) : DEFAULT_H
+  const h =
+    spec.type === 'jogo'
+      ? jogoHeight(spec)
+      : spec.type === 'ranking-completo'
+        ? rankingCompletoHeight(spec)
+        : DEFAULT_H
 
   const canvas = document.createElement('canvas')
   canvas.width = W
@@ -401,6 +513,9 @@ export function generateShareCard(spec: ShareSpec): HTMLCanvasElement {
       break
     case 'jogo':
       drawJogo(ctx, spec, h)
+      break
+    case 'ranking-completo':
+      drawRankingCompleto(ctx, spec, h)
       break
   }
 

@@ -16,12 +16,20 @@ interface PredRow {
 
 interface OusadiaItem {
   key: string
+  user_id: string
   nome: string
   jogo: string
   data: string
   palpite: string
   resultado: string
   ousadia: number
+}
+
+interface CerteiroUser {
+  user_id: string
+  nome: string
+  exatos: number
+  itens: OusadiaItem[]
 }
 
 export default async function HallPage() {
@@ -88,6 +96,7 @@ export default async function HallPage() {
     const ousadia = Math.abs(p.gols_casa - g.gols_casa_real!) + Math.abs(p.gols_fora - g.gols_fora_real!)
     items.push({
       key: `${p.user_id}-${p.game_id}`,
+      user_id: p.user_id,
       nome,
       jogo: `${g.bandeira_casa || ''} ${g.time_casa} × ${g.time_fora} ${g.bandeira_fora || ''}`.trim(),
       data: formatDataHora(g.data_hora),
@@ -98,7 +107,22 @@ export default async function HallPage() {
   }
 
   const maisOusados = items.slice().sort((a, b) => b.ousadia - a.ousadia).slice(0, 10)
-  const maisCerteiros = items.slice().sort((a, b) => a.ousadia - b.ousadia).slice(0, 5)
+
+  // Agrupa placares exatos (ousadia=0) por participante, ordenado por quem acertou mais.
+  const exatosMap = new Map<string, CerteiroUser>()
+  for (const item of items) {
+    if (item.ousadia !== 0) continue
+    const existing = exatosMap.get(item.user_id)
+    if (existing) {
+      existing.exatos++
+      existing.itens.push(item)
+    } else {
+      exatosMap.set(item.user_id, { user_id: item.user_id, nome: item.nome, exatos: 1, itens: [item] })
+    }
+  }
+  const maisCerteiros: CerteiroUser[] = Array.from(exatosMap.values())
+    .sort((a, b) => b.exatos - a.exatos)
+    .slice(0, 10)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -152,34 +176,47 @@ export default async function HallPage() {
               </div>
             </div>
 
-            {/* Mais certeiros */}
+            {/* Mais certeiros - agrupado por pessoa */}
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <div className="bg-gradient-to-r from-green-600 to-emerald-500 px-4 py-3">
                 <h2 className="text-white font-bold">🎯 Os mais certeiros</h2>
+                <p className="text-green-100 text-xs mt-0.5">Quem acertou mais placares exatos</p>
               </div>
-              <div className="divide-y">
-                {maisCerteiros.map((item, idx) => (
-                  <div key={item.key} className="px-4 py-3 flex items-center gap-3">
-                    <span className="text-xl w-8 text-center shrink-0">
-                      {idx === 0 ? '🏅' : '✅'}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-gray-800 truncate">{item.nome}</div>
-                      <div className="text-xs text-gray-500 truncate">{item.jogo}</div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-sm">
-                        <span className="font-bold text-gray-700">{item.palpite}</span>
-                        <span className="text-gray-400"> vs </span>
-                        <span className="font-bold text-green-700">{item.resultado}</span>
+              {maisCerteiros.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-400 text-sm">
+                  <div className="text-3xl mb-2">🎯</div>
+                  Ainda nenhum placar exato no bolão. Boa sorte!
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {maisCerteiros.map((user, idx) => (
+                    <div key={user.user_id} className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl w-8 text-center shrink-0">
+                          {idx === 0 ? '🏅' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🎯'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-gray-800">{user.nome}</div>
+                        </div>
+                        <div className="shrink-0">
+                          <span className="text-sm font-extrabold bg-green-100 text-green-700 px-2.5 py-1 rounded-full">
+                            {user.exatos} {user.exatos === 1 ? 'exato' : 'exatos'} 🎯
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-1 inline-block text-xs font-extrabold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                        {item.ousadia === 0 ? 'na mosca! 🎯' : `ousadia ${item.ousadia}`}
+                      <div className="mt-2 ml-11 space-y-1">
+                        {user.itens.map((item) => (
+                          <div key={item.key} className="text-xs text-gray-500 flex gap-2 items-center">
+                            <span className="shrink-0 text-gray-400">{item.data}</span>
+                            <span className="truncate">{item.jogo}</span>
+                            <span className="font-bold text-green-700 shrink-0">{item.palpite}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
