@@ -51,7 +51,15 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   const [activeTab, setActiveTab] = useState<Tab>('users')
   const [localUsers, setLocalUsers] = useState<Profile[]>(users)
   const [localGames, setLocalGames] = useState<Game[]>(games)
-  const [results, setResults] = useState<Record<string, { casa: string; fora: string }>>({})
+  const [results, setResults] = useState<Record<string, { casa: string; fora: string }>>(() => {
+    const initial: Record<string, { casa: string; fora: string }> = {}
+    games.forEach((g) => {
+      if (g.resultado_lancado && g.gols_casa_real !== null && g.gols_fora_real !== null) {
+        initial[g.id] = { casa: g.gols_casa_real.toString(), fora: g.gols_fora_real.toString() }
+      }
+    })
+    return initial
+  })
   const [savingUser, setSavingUser] = useState<Record<string, boolean>>({})
   const [savingGame, setSavingGame] = useState<Record<string, boolean>>({})
   const [savedGame, setSavedGame] = useState<Record<string, boolean>>({})
