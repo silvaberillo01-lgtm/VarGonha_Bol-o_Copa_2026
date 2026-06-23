@@ -20,11 +20,18 @@ export default async function DashboardPage() {
     .select('*')
     .eq('user_id', user.id)
 
+  const { data: champion } = await supabase
+    .from('champion_predictions')
+    .select('selecao')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
   return (
     <DashboardClient
       games={games || []}
       predictions={predictions || []}
       userId={user.id}
+      champion={champion?.selecao || null}
     />
   )
 }

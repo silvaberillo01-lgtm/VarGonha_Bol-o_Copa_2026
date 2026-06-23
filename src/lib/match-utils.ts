@@ -1,5 +1,11 @@
 import { Game } from '@/types'
-import { DEADLINE_FASE1 } from '@/lib/scoring'
+import { DEADLINE_FASE1, KNOCKOUT_LOCK_OFFSET_MIN } from '@/lib/scoring'
+
+// Instante em que o palpite do mata-mata fecha: 30 min antes do jogo.
+export function knockoutLockTime(dataHora: string | Date): Date {
+  const start = new Date(dataHora)
+  return new Date(start.getTime() - KNOCKOUT_LOCK_OFFSET_MIN * 60_000)
+}
 
 export type GameStatus = 'nao_iniciado' | 'em_andamento' | 'encerrado'
 
@@ -29,7 +35,8 @@ export function statusLabel(status: GameStatus): { text: string; emoji: string; 
 // um palpite só fica visível para todos depois que não pode mais ser alterado.
 export function isGameLocked(game: Game, now: Date = new Date()): boolean {
   if (game.fase === 'grupos') return now > DEADLINE_FASE1 || game.resultado_lancado
-  return now > new Date(game.data_hora) || game.resultado_lancado
+  // Mata-mata: fecha 30 min antes do jogo.
+  return now > knockoutLockTime(game.data_hora) || game.resultado_lancado
 }
 
 // Chave AAAA-MM-DD no fuso de Brasília (America/Sao_Paulo, UTC-3).

@@ -19,13 +19,15 @@ const SELECOES = [
 ].sort()
 
 const KNOCKOUT_FASES = [
-  { key: 'fase32', label: 'Fase de 32' },
+  { key: 'fase32', label: '1/16 avos de Final' },
   { key: 'oitavas', label: 'Oitavas de Final' },
   { key: 'quartas', label: 'Quartas de Final' },
   { key: 'semis', label: 'Semifinal' },
   { key: 'terceiro', label: '3º e 4º Lugar' },
   { key: 'final', label: 'Final' },
 ]
+
+const numFromCode = (code?: string | null) => (code ? parseInt(code.replace(/^M/, '')) : NaN)
 
 interface SpecialEntry {
   id: string
@@ -58,6 +60,13 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   const [userMsg, setUserMsg] = useState<Record<string, string>>({})
   const [gameMsg, setGameMsg] = useState<Record<string, string>>({})
   const [deletingUser, setDeletingUser] = useState<Record<string, boolean>>({})
+
+  // Edição dos jogos de mata-mata (times reais, placar, classificado, data)
+  const [koEdits, setKoEdits] = useState<Record<string, {
+    time_casa: string; time_fora: string; casa: string; fora: string; classificado: string; data_hora: string
+  }>>({})
+  const [savingKo, setSavingKo] = useState<Record<string, boolean>>({})
+  const [koMsg, setKoMsg] = useState<Record<string, string>>({})
 
   // Add game form
   const [newGame, setNewGame] = useState({
@@ -283,6 +292,135 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
       setJogadoresText(lines.join('\n'))
     }
     reader.readAsText(file)
+  }
+
+  const koEdit = (game: Game) => {
+    if (koEdits[game.id]) return koEdits[game.id]
+    const toLocal = (iso: string) => {
+      const d = new Date(iso)
+      const off = d.getTimezoneOffset() * 60000
+      return new Date(d.getTime() - off).toISOString().slice(0, 16)
+    }
+    return {
+      time_casa: game.time_casa || '',
+      time_fora: game.time_fora || '',
+      casa: game.gols_casa_real != null ? String(game.gols_casa_real) : '',
+      fora: game.gols_fora_real != null ? String(game.gols_fora_real) : '',
+      classificado: game.classificado_real || '',
+      data_hora: toLocal(game.data_hora),
+    }
+  }
+
+  const setKo = (gameId: string, patch: Partial<ReturnType<typeof koEdit>>, game: Game) => {
+    setKoEdits((prev) => ({ ...prev, [gameId]: { ...koEdit(game), ...prev[gameId], ...patch } }))
+    setKoMsg((prev) => ({ ...prev, [gameId]: '' }))
+  }
+
+  const handleSaveKoData = async (game: Game) => {
+    const e = koEdit(game)
+    setSavingKo((prev) => ({ ...prev, [game.id]: true }))
+    const res = await fetch('/api/admin/update-game', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_id: game.id, time_casa: e.time_casa, time_fora: e.time_fora,
+        data_hora: e.data_hora ? new Date(e.data_hora).toISOString() : undefined,
+      }),
+    })
+    setSavingKo((prev) => ({ ...prev, [game.id]: false }))
+    if (res.ok) {
+      const { game: g } = await res.json()
+      setLocalGames((prev) => prev.map((x) => (x.id === game.id ? { ...x, ...g } : x)))
+      setKoMsg((prev) => ({ ...prev, [game.id]: '✓ Dados salvos!' }))
+    } else {
+      const d = await res.json()
+      setKoMsg((prev) => ({ ...prev, [game.id]: d.error || 'Erro ao salvar.' }))
+    }
+  }
+
+  const handleLaunchKo = async (game: Game) => {
+    const e = koEdit(game)
+    if (e.casa === '' || e.fora === '') { setKoMsg((p) => ({ ...p, [game.id]: 'Preencha o placar.' })); return }
+    if (!e.time_casa || !e.time_fora) { setKoMsg((p) => ({ ...p, [game.id]: 'Informe os dois times reais.' })); return }
+    const casa = parseInt(e.casa), fora = parseInt(e.fora)
+    let classificado = e.classificado
+    if (casa !== fora) classificado = casa > fora ? e.time_casa : e.time_fora
+    if (!classificado) { setKoMsg((p) => ({ ...p, [game.id]: 'Empate: escolha quem se classificou (pênaltis).' })); return }
+    setSavingKo((prev) => ({ ...prev, [game.id]: true }))
+    const res = await fetch('/api/admin/update-result', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game_id: game.id, gols_casa_real: casa, gols_fora_real: fora,
+        time_casa_real: e.time_casa, time_fora_real: e.time_fora, classificado_real: classificado,
+      }),
+    })
+    setSavingKo((prev) => ({ ...prev, [game.id]: false }))
+    if (res.ok) {
+      const d = await res.json()
+      setLocalGames((prev) => prev.map((x) => (x.id === game.id
+        ? { ...x, resultado_lancado: true, gols_casa_real: casa, gols_fora_real: fora, time_casa: e.time_casa, time_fora: e.time_fora, classificado_real: classificado }
+        : x)))
+      setKoMsg((prev) => ({ ...prev, [game.id]: d.message || '✓ Resultado lançado!' }))
+    } else {
+      const d = await res.json()
+      setKoMsg((prev) => ({ ...prev, [game.id]: d.error || 'Erro ao lançar.' }))
+    }
+  }
+
+  const renderKnockoutAdminRow = (game: Game) => {
+    const e = koEdit(game)
+    const casa = parseInt(e.casa), fora = parseInt(e.fora)
+    const isDraw = !isNaN(casa) && !isNaN(fora) && casa === fora
+    const faseLabel = KNOCKOUT_FASES.find((f) => f.key === game.fase)?.label
+    return (
+      <div key={game.id} className={`bg-white rounded-xl p-4 shadow-sm border-l-4 ${game.resultado_lancado ? 'border-green-400' : 'border-gray-200'}`}>
+        <div className="text-xs text-gray-400 mb-2">
+          {faseLabel} • Jogo {numFromCode(game.match_code)} • slots {game.slot_casa} × {game.slot_fora}
+          {game.resultado_lancado && <span className="ml-2 text-green-600 font-medium">✓ Lançado</span>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <input type="text" placeholder="Time casa (real)" value={e.time_casa}
+            onChange={(ev) => setKo(game.id, { time_casa: ev.target.value }, game)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+          <input type="text" placeholder="Time fora (real)" value={e.time_fora}
+            onChange={(ev) => setKo(game.id, { time_fora: ev.target.value }, game)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          <input type="datetime-local" value={e.data_hora}
+            onChange={(ev) => setKo(game.id, { data_hora: ev.target.value }, game)}
+            className="border border-gray-300 rounded-lg px-2 py-2 text-xs" />
+          <input type="number" min="0" max="99" placeholder="-" value={e.casa}
+            onChange={(ev) => setKo(game.id, { casa: ev.target.value }, game)}
+            className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg" />
+          <span className="font-bold text-gray-400">×</span>
+          <input type="number" min="0" max="99" placeholder="-" value={e.fora}
+            onChange={(ev) => setKo(game.id, { fora: ev.target.value }, game)}
+            className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg" />
+        </div>
+        {isDraw && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-gray-500">Pênaltis — passa:</span>
+            {[e.time_casa, e.time_fora].filter(Boolean).map((t) => (
+              <button key={t} type="button" onClick={() => setKo(game.id, { classificado: t }, game)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 ${e.classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300'}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <button onClick={() => handleSaveKoData(game)} disabled={savingKo[game.id]}
+            className="bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50">
+            Salvar dados
+          </button>
+          <button onClick={() => handleLaunchKo(game)} disabled={savingKo[game.id]}
+            className="bg-green-700 hover:bg-green-800 text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50">
+            {game.resultado_lancado ? 'Atualizar resultado' : 'Lançar resultado'}
+          </button>
+          {koMsg[game.id] && <span className={`text-xs ${koMsg[game.id].startsWith('✓') || koMsg[game.id].startsWith('Resultado') ? 'text-green-600' : 'text-red-500'}`}>{koMsg[game.id]}</span>}
+        </div>
+      </div>
+    )
   }
 
   const getInitialResult = (game: Game) => {
@@ -684,13 +822,22 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
 
           {knockoutGamesLocal.length === 0 ? (
             <div className="bg-gray-50 rounded-xl p-8 text-center text-gray-500">
-              Nenhum jogo eliminatório adicionado ainda.
+              Nenhum jogo eliminatório. Rode a migração <code>migration_mata_mata.sql</code> para
+              semear o chaveamento, ou adicione manualmente.
             </div>
           ) : (
-            <div className="space-y-3">
-              {sortGames(knockoutGamesLocal).pending.map(renderResultRow)}
-              {sortGames(knockoutGamesLocal).upcoming.map(renderResultRow)}
-              {sortGames(knockoutGamesLocal).completed.map(renderResultRow)}
+            <div className="space-y-6">
+              {KNOCKOUT_FASES.filter((f) => knockoutGamesLocal.some((g) => g.fase === f.key)).map((f) => (
+                <div key={f.key}>
+                  <h3 className="text-sm font-bold text-gray-700 mb-2">{f.label}</h3>
+                  <div className="space-y-3">
+                    {knockoutGamesLocal
+                      .filter((g) => g.fase === f.key)
+                      .sort((a, b) => numFromCode(a.match_code) - numFromCode(b.match_code))
+                      .map(renderKnockoutAdminRow)}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
