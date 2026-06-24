@@ -26,6 +26,11 @@ CREATE TABLE public.games (
   gols_casa_real INTEGER,
   gols_fora_real INTEGER,
   resultado_lancado BOOLEAN DEFAULT FALSE,
+  -- Mata-mata: identidade do slot no chaveamento + time que avançou (pênalti)
+  match_code TEXT,
+  slot_casa TEXT,
+  slot_fora TEXT,
+  classificado_real TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -37,6 +42,10 @@ CREATE TABLE public.predictions (
   gols_casa INTEGER NOT NULL CHECK (gols_casa >= 0),
   gols_fora INTEGER NOT NULL CHECK (gols_fora >= 0),
   pontos INTEGER DEFAULT 0,
+  -- Mata-mata: times derivados do chaveamento do usuário + quem ele faz avançar
+  time_casa_palpite TEXT,
+  time_fora_palpite TEXT,
+  classificado_palpite TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, game_id)
@@ -205,14 +214,15 @@ AS $$
     COALESCE(p.total_palpites, 0)::BIGINT AS total_palpites
   FROM public.profiles pr
   LEFT JOIN (
-    SELECT user_id,
-      SUM(pontos) AS total_pontos,
+    SELECT pred.user_id,
+      SUM(pred.pontos) AS total_pontos,
       COUNT(*) AS total_palpites,
-      COUNT(*) FILTER (WHERE pontos = 15) AS exatos,
-      COUNT(*) FILTER (WHERE pontos = 10) AS resultado,
-      COUNT(*) FILTER (WHERE pontos = 5) AS parciais
-    FROM public.predictions
-    GROUP BY user_id
+      COUNT(*) FILTER (WHERE g.fase = 'grupos' AND pred.pontos = 15) AS exatos,
+      COUNT(*) FILTER (WHERE g.fase = 'grupos' AND pred.pontos = 10) AS resultado,
+      COUNT(*) FILTER (WHERE g.fase = 'grupos' AND pred.pontos = 5) AS parciais
+    FROM public.predictions pred
+    JOIN public.games g ON g.id = pred.game_id
+    GROUP BY pred.user_id
   ) p ON p.user_id = pr.id
   LEFT JOIN public.champion_predictions cp ON cp.user_id = pr.id
   LEFT JOIN (

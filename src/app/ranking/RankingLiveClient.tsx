@@ -252,6 +252,7 @@ export default function RankingLiveClient({
           <span className="text-yellow-600">⭐ Placar exato = 15 pts</span>
           <span className="text-green-600">✅ Resultado correto = 10 pts</span>
           <span className="text-blue-600">🟡 Um gol certo = 5 pts</span>
+          <span className="text-gray-600">🏟️ Mata-mata = até 25 pts (placar + classificados)</span>
           <span className="text-purple-600">🏆 Campeão certo = 200 pts</span>
           <span className="text-orange-600">⚽ Artilheiro certo = {artilheiroPontos} pts</span>
           <span className="text-pink-600">🌟 Melhor Jogador certo = {melhorJogadorPontos} pts</span>

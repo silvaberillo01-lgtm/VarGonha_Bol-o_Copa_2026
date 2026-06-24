@@ -24,6 +24,11 @@ export interface Game {
   gols_fora_real: number | null
   resultado_lancado: boolean
   created_at: string
+  // Mata-mata (nulos na fase de grupos)
+  match_code?: string | null
+  slot_casa?: string | null
+  slot_fora?: string | null
+  classificado_real?: string | null
 }
 
 export interface Prediction {
@@ -35,6 +40,10 @@ export interface Prediction {
   pontos: number
   created_at: string
   updated_at: string
+  // Mata-mata: times derivados do chaveamento do usuário + quem ele faz avançar
+  time_casa_palpite?: string | null
+  time_fora_palpite?: string | null
+  classificado_palpite?: string | null
 }
 
 export interface ChampionPrediction {

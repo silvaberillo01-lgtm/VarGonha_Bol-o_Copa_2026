@@ -3,20 +3,7 @@
 import { useState } from 'react'
 import { DEADLINE_CAMPEAO, BONUS_CAMPEAO } from '@/lib/scoring'
 import { SpecialPrediction } from '@/types'
-
-// 48 seleções classificadas para a Copa do Mundo 2026
-const SELECOES = [
-  'África do Sul', 'Alemanha', 'Arábia Saudita', 'Argentina', 'Argélia',
-  'Austrália', 'Áustria', 'Bélgica', 'Bósnia e Herzegovina', 'Brasil',
-  'Cabo Verde', 'Canadá', 'Catar', 'Colômbia', 'Coreia do Sul',
-  'Costa do Marfim', 'Croácia', 'Curaçao', 'Egito', 'Equador',
-  'Escócia', 'Espanha', 'Estados Unidos', 'França', 'Gana',
-  'Haiti', 'Holanda', 'Inglaterra', 'Irã', 'Iraque',
-  'Japão', 'Jordânia', 'Marrocos', 'México', 'Noruega',
-  'Nova Zelândia', 'Panamá', 'Paraguai', 'Portugal', 'RD do Congo',
-  'República Tcheca', 'Senegal', 'Suécia', 'Suíça', 'Tunísia',
-  'Turquia', 'Uruguai', 'Uzbequistão',
-].sort()
+import { SELECOES } from '@/lib/teams'
 
 interface ChampionPrediction {
   selecao: string

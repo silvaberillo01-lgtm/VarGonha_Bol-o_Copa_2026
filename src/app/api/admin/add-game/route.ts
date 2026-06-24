@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
+import { normalizeTeam } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,7 +15,10 @@ export async function POST(request: Request) {
     .from('profiles').select('is_admin').eq('id', user.id).single()
   if (!profile?.is_admin) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
 
-  const { time_casa, time_fora, bandeira_casa, bandeira_fora, data_hora, fase, rodada } = await request.json()
+  const body = await request.json()
+  const { bandeira_casa, bandeira_fora, data_hora, fase, rodada } = body
+  const time_casa = normalizeTeam(body.time_casa)
+  const time_fora = normalizeTeam(body.time_fora)
 
   if (!time_casa || !time_fora || !data_hora || !fase) {
     return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 })
