@@ -1,3 +1,5 @@
+import { normalizeTeam } from './teams'
+
 export function calcularPontos(
   golsCasaPalpite: number,
   golsForaPalpite: number,
@@ -79,17 +81,26 @@ export interface ResultadoMataMata {
 }
 
 export function calcularPontosMataMata(p: PalpiteMataMata, r: ResultadoMataMata): number {
+  // Normaliza nomes para que grafias diferentes (ex.: "Curaçao"/"Curaçau")
+  // não façam a comparação falhar silenciosamente.
+  const tcp = normalizeTeam(p.time_casa_palpite)
+  const tfp = normalizeTeam(p.time_fora_palpite)
+  const clp = normalizeTeam(p.classificado_palpite)
+  const tcr = normalizeTeam(r.time_casa_real)
+  const tfr = normalizeTeam(r.time_fora_real)
+  const clr = normalizeTeam(r.classificado_real)
+
   // Cenário pelo acerto posicional dos times.
   let acertosTimes = 0
-  if (p.time_casa_palpite && p.time_casa_palpite === r.time_casa_real) acertosTimes++
-  if (p.time_fora_palpite && p.time_fora_palpite === r.time_fora_real) acertosTimes++
+  if (tcp && tcp === tcr) acertosTimes++
+  if (tfp && tfp === tfr) acertosTimes++
   const cenario: Cenario = acertosTimes === 2 ? 'A' : acertosTimes === 1 ? 'B' : 'C'
 
   // Lado que avança no palpite e na realidade (posicional).
   const ladoPalpite =
-    p.classificado_palpite && p.classificado_palpite === p.time_casa_palpite
+    clp && clp === tcp
       ? 'casa'
-      : p.classificado_palpite && p.classificado_palpite === p.time_fora_palpite
+      : clp && clp === tfp
       ? 'fora'
       : p.gols_casa > p.gols_fora
       ? 'casa'
@@ -97,9 +108,9 @@ export function calcularPontosMataMata(p: PalpiteMataMata, r: ResultadoMataMata)
       ? 'fora'
       : null
   const ladoReal =
-    r.classificado_real && r.classificado_real === r.time_casa_real
+    clr && clr === tcr
       ? 'casa'
-      : r.classificado_real && r.classificado_real === r.time_fora_real
+      : clr && clr === tfr
       ? 'fora'
       : r.gols_casa_real > r.gols_fora_real
       ? 'casa'

@@ -3,20 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Profile, Game } from '@/types'
-
-// 48 seleções Copa 2026
-const SELECOES = [
-  'África do Sul', 'Alemanha', 'Arábia Saudita', 'Argentina', 'Argélia',
-  'Austrália', 'Áustria', 'Bélgica', 'Bósnia e Herzegovina', 'Brasil',
-  'Cabo Verde', 'Canadá', 'Catar', 'Colômbia', 'Coreia do Sul',
-  'Costa do Marfim', 'Croácia', 'Curaçao', 'Egito', 'Equador',
-  'Escócia', 'Espanha', 'Estados Unidos', 'França', 'Gana',
-  'Haiti', 'Holanda', 'Inglaterra', 'Irã', 'Iraque',
-  'Japão', 'Jordânia', 'Marrocos', 'México', 'Noruega',
-  'Nova Zelândia', 'Panamá', 'Paraguai', 'Portugal', 'RD do Congo',
-  'República Tcheca', 'Senegal', 'Suécia', 'Suíça', 'Tunísia',
-  'Turquia', 'Uruguai', 'Uzbequistão',
-].sort()
+import { SELECOES, normalizeTeam } from '@/lib/teams'
 
 const KNOCKOUT_FASES = [
   { key: 'fase32', label: '1/16 avos de Final' },
@@ -302,11 +289,11 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
       return new Date(d.getTime() - off).toISOString().slice(0, 16)
     }
     return {
-      time_casa: game.time_casa || '',
-      time_fora: game.time_fora || '',
+      time_casa: normalizeTeam(game.time_casa) || '',
+      time_fora: normalizeTeam(game.time_fora) || '',
       casa: game.gols_casa_real != null ? String(game.gols_casa_real) : '',
       fora: game.gols_fora_real != null ? String(game.gols_fora_real) : '',
-      classificado: game.classificado_real || '',
+      classificado: normalizeTeam(game.classificado_real) || '',
       data_hora: toLocal(game.data_hora),
     }
   }
@@ -378,12 +365,18 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
           {game.resultado_lancado && <span className="ml-2 text-green-600 font-medium">✓ Lançado</span>}
         </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
-          <input type="text" placeholder="Time casa (real)" value={e.time_casa}
+          <select value={e.time_casa}
             onChange={(ev) => setKo(game.id, { time_casa: ev.target.value }, game)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-          <input type="text" placeholder="Time fora (real)" value={e.time_fora}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">-- time casa (real) --</option>
+            {SELECOES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={e.time_fora}
             onChange={(ev) => setKo(game.id, { time_fora: ev.target.value }, game)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <option value="">-- time fora (real) --</option>
+            {SELECOES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <input type="datetime-local" value={e.data_hora}
@@ -786,10 +779,12 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
                       onChange={(e) => setNewGame((p) => ({ ...p, bandeira_casa: e.target.value }))}
                       className="w-14 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
                     />
-                    <input type="text" placeholder="Brasil" value={newGame.time_casa}
+                    <select value={newGame.time_casa}
                       onChange={(e) => setNewGame((p) => ({ ...p, time_casa: e.target.value }))}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    />
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <option value="">-- time --</option>
+                      {SELECOES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div>
@@ -799,10 +794,12 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
                       onChange={(e) => setNewGame((p) => ({ ...p, bandeira_fora: e.target.value }))}
                       className="w-14 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center"
                     />
-                    <input type="text" placeholder="Argentina" value={newGame.time_fora}
+                    <select value={newGame.time_fora}
                       onChange={(e) => setNewGame((p) => ({ ...p, time_fora: e.target.value }))}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                    />
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                      <option value="">-- time --</option>
+                      {SELECOES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 </div>
               </div>

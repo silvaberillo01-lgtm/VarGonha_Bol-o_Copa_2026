@@ -1,6 +1,7 @@
 import { createServerClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
+import { normalizeTeam } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,8 +22,8 @@ export async function POST(request: Request) {
   if (!game_id) return NextResponse.json({ error: 'Jogo não informado' }, { status: 400 })
 
   const update: Record<string, unknown> = {}
-  if (time_casa !== undefined) update.time_casa = time_casa
-  if (time_fora !== undefined) update.time_fora = time_fora
+  if (time_casa !== undefined) update.time_casa = normalizeTeam(time_casa)
+  if (time_fora !== undefined) update.time_fora = normalizeTeam(time_fora)
   if (bandeira_casa !== undefined) update.bandeira_casa = bandeira_casa
   if (bandeira_fora !== undefined) update.bandeira_fora = bandeira_fora
   if (data_hora !== undefined && data_hora !== '') update.data_hora = data_hora

@@ -7,6 +7,7 @@ import {
   GroupGameResult,
   KnockoutPick,
 } from '@/lib/bracket'
+import { normalizeTeam, isSelecao } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,9 +35,12 @@ export async function POST(request: Request) {
     if (new Date() > DEADLINE_CAMPEAO) {
       return NextResponse.json({ error: 'Prazo para palpite do campeão encerrado' }, { status: 400 })
     }
-    const { selecao } = body
+    const selecao = normalizeTeam(body.selecao)
     if (!selecao) {
       return NextResponse.json({ error: 'Selecione uma seleção' }, { status: 400 })
+    }
+    if (!isSelecao(selecao)) {
+      return NextResponse.json({ error: 'Seleção inválida' }, { status: 400 })
     }
     const { error } = await supabase
       .from('champion_predictions')
@@ -170,7 +174,7 @@ export async function POST(request: Request) {
   }
 
   // Valida quem avança. Em caso de empate, é obrigatório escolher.
-  let classificadoFinal: string | null = classificado_palpite ?? null
+  let classificadoFinal: string | null = normalizeTeam(classificado_palpite)
   const empate = gols_casa === gols_fora
 
   if (time_casa_palpite && time_fora_palpite) {

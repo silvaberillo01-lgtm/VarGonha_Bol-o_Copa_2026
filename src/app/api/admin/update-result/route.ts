@@ -2,6 +2,7 @@ import { createServerClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
 import { calcularPontos, calcularPontosMataMata } from '@/lib/scoring'
+import { normalizeTeam } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,9 +55,9 @@ export async function POST(request: Request) {
 
   // Em mata-mata, exige saber quem avança (especialmente em empate).
   const empate = gols_casa_real === gols_fora_real
-  let classificadoReal: string | null = classificado_real ?? game.classificado_real ?? null
-  const timeCasaReal = (time_casa_real ?? game.time_casa) as string
-  const timeForaReal = (time_fora_real ?? game.time_fora) as string
+  let classificadoReal: string | null = normalizeTeam(classificado_real ?? game.classificado_real)
+  const timeCasaReal = normalizeTeam(time_casa_real ?? game.time_casa) as string
+  const timeForaReal = normalizeTeam(time_fora_real ?? game.time_fora) as string
 
   if (isKnockout) {
     if (classificadoReal && ![timeCasaReal, timeForaReal].includes(classificadoReal)) {

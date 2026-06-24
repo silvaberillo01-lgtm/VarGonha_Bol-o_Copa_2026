@@ -6,6 +6,8 @@
 // referem-se à posição final dentro de cada grupo do app (A..L); W## = vencedor
 // do jogo ##; L## = perdedor do jogo ##.
 
+import { normalizeTeam } from './teams'
+
 export type Fase = 'grupos' | 'fase32' | 'oitavas' | 'quartas' | 'semis' | 'terceiro' | 'final'
 
 export interface BracketMatch {
@@ -162,9 +164,16 @@ function sortGroup(teams: MutableStanding[], games: GroupGameResult[]): MutableS
 // reais). Se `champion` for informado e estiver num grupo, ele é forçado para a
 // 1ª posição (regra "campeão avança em todas as fases").
 export function computeGroupStandings(
-  games: GroupGameResult[],
-  champion?: string | null,
+  gamesRaw: GroupGameResult[],
+  championRaw?: string | null,
 ): Record<string, TeamStanding[]> {
+  // Normaliza os nomes uma vez; tudo daqui pra frente opera em forma canônica.
+  const games: GroupGameResult[] = gamesRaw.map((g) => ({
+    ...g,
+    time_casa: normalizeTeam(g.time_casa) as string,
+    time_fora: normalizeTeam(g.time_fora) as string,
+  }))
+  const champion = normalizeTeam(championRaw)
   const byGroup: Record<string, Record<string, MutableStanding>> = {}
 
   const ensure = (grupo: string, team: string) => {
@@ -271,8 +280,9 @@ export interface KnockoutPick {
 export function computeUserBracket(
   groupGames: GroupGameResult[],
   knockoutPicks: Record<number, KnockoutPick>,
-  champion?: string | null,
+  championRaw?: string | null,
 ): Record<number, ResolvedMatch> {
+  const champion = normalizeTeam(championRaw)
   const standings = computeGroupStandings(groupGames, champion)
   const thirds = assignThirds(selectBestThirds(standings))
 
@@ -294,6 +304,7 @@ export function computeUserBracket(
     const time_casa = resolveSlot(m.slot_casa)
     const time_fora = resolveSlot(m.slot_fora)
     const pick = knockoutPicks[m.num] || {}
+    const pickClassificado = normalizeTeam(pick.classificado_palpite)
 
     // Quem avança: campeão sempre avança (sobrepõe); senão o palpite do usuário;
     // só vale se for um dos dois times do confronto.
@@ -301,10 +312,10 @@ export function computeUserBracket(
     if (champion && (champion === time_casa || champion === time_fora)) {
       classificado = champion
     } else if (
-      pick.classificado_palpite &&
-      (pick.classificado_palpite === time_casa || pick.classificado_palpite === time_fora)
+      pickClassificado &&
+      (pickClassificado === time_casa || pickClassificado === time_fora)
     ) {
-      classificado = pick.classificado_palpite
+      classificado = pickClassificado
     }
 
     out[m.num] = { num: m.num, fase: m.fase, time_casa, time_fora, classificado }
