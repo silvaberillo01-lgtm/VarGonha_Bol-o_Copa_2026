@@ -92,6 +92,7 @@ export async function POST(request: Request) {
   // Deriva os times do confronto a partir do chaveamento do próprio usuário.
   let time_casa_palpite: string | null = null
   let time_fora_palpite: string | null = null
+  let championSelecao: string | null = null
 
   if (game.match_code) {
     const num = parseInt(game.match_code.replace(/^M/, ''))
@@ -156,7 +157,8 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const bracket = computeUserBracket(groupResults, knockoutPicks, champ?.selecao || null, fase32Teams)
+    championSelecao = champ?.selecao || null
+    const bracket = computeUserBracket(groupResults, knockoutPicks, championSelecao, fase32Teams)
     const resolved = bracket[num]
     if (resolved) {
       time_casa_palpite = resolved.time_casa
@@ -186,6 +188,13 @@ export async function POST(request: Request) {
   // Valida quem avança. Em caso de empate, é obrigatório escolher.
   let classificadoFinal: string | null = normalizeTeam(classificado_palpite)
   const empate = gols_casa === gols_fora
+
+  // Campeão sempre avança (todas as fases, 16 avos incluído): se o campeão
+  // palpitado está no confronto, ele é o classificado e sobrepõe o palpite.
+  const champNorm = normalizeTeam(championSelecao)
+  if (champNorm && (champNorm === time_casa_palpite || champNorm === time_fora_palpite)) {
+    classificadoFinal = champNorm
+  }
 
   if (time_casa_palpite && time_fora_palpite) {
     if (classificadoFinal && ![time_casa_palpite, time_fora_palpite].includes(classificadoFinal)) {

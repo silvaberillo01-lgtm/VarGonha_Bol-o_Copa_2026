@@ -321,10 +321,10 @@ export function computeUserBracket(
     const pick = knockoutPicks[m.num] || {}
     const pickClassificado = normalizeTeam(pick.classificado_palpite)
 
-    // Quem avança. Em 16 avos é a escolha do jogador (campeão entra só como
-    // sugestão na UI). Das oitavas em diante o campeão palpitado sempre avança.
+    // Quem avança: o campeão palpitado SEMPRE avança em qualquer fase (16 avos
+    // incluído) se estiver no confronto; senão vale o palpite do jogador.
     let classificado: string | null = null
-    if (m.fase !== 'fase32' && champion && (champion === time_casa || champion === time_fora)) {
+    if (champion && (champion === time_casa || champion === time_fora)) {
       classificado = champion
     } else if (
       pickClassificado &&

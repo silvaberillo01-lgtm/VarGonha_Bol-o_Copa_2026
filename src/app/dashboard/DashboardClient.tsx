@@ -112,7 +112,9 @@ export default function DashboardClient({ games, predictions, champion }: Props)
       const casa = parseInt(next.casa)
       const fora = parseInt(next.fora)
       const r = bracket[numFromCode(game.match_code)]
-      if (!isNaN(casa) && !isNaN(fora) && casa !== fora && r?.time_casa && r?.time_fora) {
+      const champInMatch = !!champion && (champion === r?.time_casa || champion === r?.time_fora)
+      // Campeão sempre avança: não deixa o placar mudar quem passa.
+      if (!champInMatch && !isNaN(casa) && !isNaN(fora) && casa !== fora && r?.time_casa && r?.time_fora) {
         const winner = casa > fora ? r.time_casa : r.time_fora
         setLocalClassificado((c) => ({ ...c, [game.id]: winner }))
       }
@@ -153,15 +155,13 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const golsCasa = parseInt(pred.casa)
     const golsFora = parseInt(pred.fora)
     const r = bracket[numFromCode(game.match_code)]
+    const champInMatch = !!champion && (champion === r?.time_casa || champion === r?.time_fora)
     let classificado = localClassificado[gameId]
-    if (golsCasa !== golsFora && r?.time_casa && r?.time_fora) {
+    // Campeão sempre avança: se está no confronto, ele é quem passa (sobrepõe).
+    if (champInMatch) {
+      classificado = champion as string
+    } else if (golsCasa !== golsFora && r?.time_casa && r?.time_fora) {
       classificado = golsCasa > golsFora ? r.time_casa : r.time_fora
-    }
-    // 16 avos no empate: se nada foi escolhido e o campeão está no confronto,
-    // usa o campeão como sugestão padrão de quem passa.
-    if (!classificado && game.fase === 'fase32' && champion &&
-        (champion === r?.time_casa || champion === r?.time_fora)) {
-      classificado = champion
     }
     if (!classificado && r?.time_casa && r?.time_fora) {
       setErrors((prev) => ({ ...prev, [gameId]: 'Empate: escolha quem passa nos pênaltis.' }))
@@ -297,13 +297,11 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const casaTeam = game.resultado_lancado ? game.time_casa : resolved?.time_casa
     const foraTeam = game.resultado_lancado ? game.time_fora : resolved?.time_fora
     const undecided = !game.resultado_lancado && (!casaTeam || !foraTeam)
-    // 16 avos: se o campeão palpitado está no confronto, sugere ele como "quem
-    // passa" (editável). Útil sobretudo no empate (pênaltis).
-    const champDefaultF32 =
-      game.fase === 'fase32' && champion && (champion === casaTeam || champion === foraTeam)
-        ? champion
-        : null
-    const classificado = localClassificado[game.id] ?? champDefaultF32 ?? undefined
+    // Campeão sempre avança: se o campeão palpitado está no confronto, ele é
+    // forçado como "quem passa" (não editável) em qualquer fase.
+    const forcedChamp =
+      champion && (champion === casaTeam || champion === foraTeam) ? champion : null
+    const classificado = forcedChamp ?? localClassificado[game.id] ?? undefined
     const casa = parseInt(localPred.casa)
     const fora = parseInt(localPred.fora)
     const isDraw = !isNaN(casa) && !isNaN(fora) && casa === fora
@@ -360,15 +358,16 @@ export default function DashboardClient({ games, predictions, champion }: Props)
             {!game.resultado_lancado && !isLocked && (
               <div className="mt-4">
                 <p className="text-xs text-gray-500 mb-1 text-center">
-                  {isDraw ? '🥅 Empate — quem passa nos pênaltis?' : 'Quem se classifica'}
+                  {forcedChamp ? '🏆 Seu campeão avança automaticamente'
+                    : isDraw ? '🥅 Empate — quem passa nos pênaltis?' : 'Quem se classifica'}
                 </p>
                 <div className="flex gap-2 justify-center">
                   {[casaTeam, foraTeam].map((t) => (
                     <button key={t} type="button"
-                      onClick={() => { setLocalClassificado((c) => ({ ...c, [game.id]: t as string })); setSaved((s) => ({ ...s, [game.id]: false })) }}
-                      disabled={!isDraw && classificado === t}
+                      onClick={() => { if (forcedChamp) return; setLocalClassificado((c) => ({ ...c, [game.id]: t as string })); setSaved((s) => ({ ...s, [game.id]: false })) }}
+                      disabled={!!forcedChamp ? classificado !== t : (!isDraw && classificado === t)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors ${
-                        classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'}`}>
+                        classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'} ${forcedChamp && classificado !== t ? 'opacity-40' : ''}`}>
                       {t}
                     </button>
                   ))}
