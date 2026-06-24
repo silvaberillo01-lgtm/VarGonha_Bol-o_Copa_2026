@@ -66,6 +66,7 @@ export default function ParticipanteClient({
         gols_casa: p.gols_casa, gols_fora: p.gols_fora,
       })
     })
+    const fase32Teams: Record<number, { time_casa: string | null; time_fora: string | null }> = {}
     knockoutGames.forEach((g) => {
       const num = numFromCode(g.match_code)
       if (isNaN(num)) return
@@ -75,8 +76,11 @@ export default function ParticipanteClient({
         gols_casa: p?.gols_casa ?? null,
         gols_fora: p?.gols_fora ?? null,
       }
+      if (g.fase === 'fase32') {
+        fase32Teams[num] = { time_casa: g.time_casa || null, time_fora: g.time_fora || null }
+      }
     })
-    return computeUserBracket(groupResults, knockoutPicks, champion)
+    return computeUserBracket(groupResults, knockoutPicks, champion, fase32Teams)
   }, [predictions, groupGames, knockoutGames, champion])
 
   const isGroupLocked = () => isPastGroupDeadline

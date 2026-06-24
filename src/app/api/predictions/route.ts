@@ -111,12 +111,22 @@ export async function POST(request: Request) {
     const groupResults: GroupGameResult[] = []
     const knockoutPicks: Record<number, KnockoutPick> = {}
 
-    // Mapa game_id -> match_code para os jogos de mata-mata.
+    // Mapa game_id -> match_code e confrontos REAIS dos 16 avos (lançados pelo
+    // admin), usados para montar o chaveamento.
     const { data: koGames } = await supabase
       .from('games')
-      .select('id, match_code')
+      .select('id, match_code, time_casa, time_fora, fase')
       .neq('fase', 'grupos')
     const koCodeById = new Map((koGames || []).map((g) => [g.id, g.match_code as string | null]))
+    const fase32Teams: Record<number, { time_casa: string | null; time_fora: string | null }> = {}
+    for (const g of koGames || []) {
+      if (g.fase === 'fase32' && g.match_code) {
+        fase32Teams[parseInt((g.match_code as string).replace(/^M/, ''))] = {
+          time_casa: (g.time_casa as string) ?? null,
+          time_fora: (g.time_fora as string) ?? null,
+        }
+      }
+    }
 
     for (const p of myPreds || []) {
       const gg = groupGameById.get(p.game_id)
@@ -146,7 +156,7 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    const bracket = computeUserBracket(groupResults, knockoutPicks, champ?.selecao || null)
+    const bracket = computeUserBracket(groupResults, knockoutPicks, champ?.selecao || null, fase32Teams)
     const resolved = bracket[num]
     if (resolved) {
       time_casa_palpite = resolved.time_casa

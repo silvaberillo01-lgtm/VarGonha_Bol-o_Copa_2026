@@ -97,11 +97,16 @@ export async function POST(request: Request) {
 
     if (predError) return NextResponse.json({ error: predError.message }, { status: 500 })
 
+    // 16 avos: confronto é igual pra todos (real, lançado pelo admin), então o
+    // componente de "time" do palpite é sempre o real -> todos em Cenário A
+    // (chance de 100%). Demais fases usam os times derivados do bracket de cada um.
+    const isFase32 = game.fase === 'fase32'
+
     const updates = (predictions || []).map((pred) => {
       const pontos = calcularPontosMataMata(
         {
-          time_casa_palpite: pred.time_casa_palpite,
-          time_fora_palpite: pred.time_fora_palpite,
+          time_casa_palpite: isFase32 ? timeCasaReal : pred.time_casa_palpite,
+          time_fora_palpite: isFase32 ? timeForaReal : pred.time_fora_palpite,
           classificado_palpite: pred.classificado_palpite,
           gols_casa: pred.gols_casa,
           gols_fora: pred.gols_fora,

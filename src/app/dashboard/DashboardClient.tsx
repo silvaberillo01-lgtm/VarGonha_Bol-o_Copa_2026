@@ -74,6 +74,7 @@ export default function DashboardClient({ games, predictions, champion }: Props)
         })
       }
     })
+    const fase32Teams: Record<number, { time_casa: string | null; time_fora: string | null }> = {}
     knockoutGames.forEach((g) => {
       const num = numFromCode(g.match_code)
       if (isNaN(num)) return
@@ -83,8 +84,12 @@ export default function DashboardClient({ games, predictions, champion }: Props)
         gols_casa: p?.gols_casa ?? null,
         gols_fora: p?.gols_fora ?? null,
       }
+      // 16 avos: confronto real do admin (igual pra todos).
+      if (g.fase === 'fase32') {
+        fase32Teams[num] = { time_casa: g.time_casa || null, time_fora: g.time_fora || null }
+      }
     })
-    return computeUserBracket(groupResults, knockoutPicks, champion)
+    return computeUserBracket(groupResults, knockoutPicks, champion, fase32Teams)
   }, [predictions, groupGames, knockoutGames, localClassificado, champion])
 
   const isGroupLocked = (game: Game) => isPastGroupDeadline || game.resultado_lancado
@@ -151,6 +156,12 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     let classificado = localClassificado[gameId]
     if (golsCasa !== golsFora && r?.time_casa && r?.time_fora) {
       classificado = golsCasa > golsFora ? r.time_casa : r.time_fora
+    }
+    // 16 avos no empate: se nada foi escolhido e o campeão está no confronto,
+    // usa o campeão como sugestão padrão de quem passa.
+    if (!classificado && game.fase === 'fase32' && champion &&
+        (champion === r?.time_casa || champion === r?.time_fora)) {
+      classificado = champion
     }
     if (!classificado && r?.time_casa && r?.time_fora) {
       setErrors((prev) => ({ ...prev, [gameId]: 'Empate: escolha quem passa nos pênaltis.' }))
@@ -286,7 +297,13 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const casaTeam = game.resultado_lancado ? game.time_casa : resolved?.time_casa
     const foraTeam = game.resultado_lancado ? game.time_fora : resolved?.time_fora
     const undecided = !game.resultado_lancado && (!casaTeam || !foraTeam)
-    const classificado = localClassificado[game.id]
+    // 16 avos: se o campeão palpitado está no confronto, sugere ele como "quem
+    // passa" (editável). Útil sobretudo no empate (pênaltis).
+    const champDefaultF32 =
+      game.fase === 'fase32' && champion && (champion === casaTeam || champion === foraTeam)
+        ? champion
+        : null
+    const classificado = localClassificado[game.id] ?? champDefaultF32 ?? undefined
     const casa = parseInt(localPred.casa)
     const fora = parseInt(localPred.fora)
     const isDraw = !isNaN(casa) && !isNaN(fora) && casa === fora

@@ -275,12 +275,24 @@ export interface KnockoutPick {
   gols_fora?: number | null
 }
 
+// Confronto REAL (times lançados pelo admin) de um jogo de mata-mata.
+export interface RealMatchTeams {
+  time_casa?: string | null
+  time_fora?: string | null
+}
+
 // Resolve TODO o chaveamento de um usuário a partir dos palpites de grupos +
 // dos palpites de mata-mata já feitos + do palpite de campeão.
+//
+// 16 avos (fase32): o confronto NÃO é derivado dos grupos do jogador — usa os
+// times reais lançados pelo admin (iguais para todos), passados em `fase32Teams`.
+// Assim todo mundo cai em "Cenário A" na pontuação. Das oitavas em diante o
+// chaveamento volta a ser derivado do bracket do próprio jogador.
 export function computeUserBracket(
   groupGames: GroupGameResult[],
   knockoutPicks: Record<number, KnockoutPick>,
   championRaw?: string | null,
+  fase32Teams: Record<number, RealMatchTeams> = {},
 ): Record<number, ResolvedMatch> {
   const champion = normalizeTeam(championRaw)
   const standings = computeGroupStandings(groupGames, champion)
@@ -301,15 +313,18 @@ export function computeUserBracket(
   }
 
   for (const m of BRACKET_TEMPLATE) {
-    const time_casa = resolveSlot(m.slot_casa)
-    const time_fora = resolveSlot(m.slot_fora)
+    // 16 avos: confronto real do admin (igual pra todos). Demais fases: derivado.
+    const real = m.fase === 'fase32' ? fase32Teams[m.num] : undefined
+    const usaReal = !!(real && (real.time_casa || real.time_fora))
+    const time_casa = usaReal ? normalizeTeam(real!.time_casa) : resolveSlot(m.slot_casa)
+    const time_fora = usaReal ? normalizeTeam(real!.time_fora) : resolveSlot(m.slot_fora)
     const pick = knockoutPicks[m.num] || {}
     const pickClassificado = normalizeTeam(pick.classificado_palpite)
 
-    // Quem avança: campeão sempre avança (sobrepõe); senão o palpite do usuário;
-    // só vale se for um dos dois times do confronto.
+    // Quem avança. Em 16 avos é a escolha do jogador (campeão entra só como
+    // sugestão na UI). Das oitavas em diante o campeão palpitado sempre avança.
     let classificado: string | null = null
-    if (champion && (champion === time_casa || champion === time_fora)) {
+    if (m.fase !== 'fase32' && champion && (champion === time_casa || champion === time_fora)) {
       classificado = champion
     } else if (
       pickClassificado &&
