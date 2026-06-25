@@ -93,7 +93,34 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   const [localSpecials, setLocalSpecials] = useState<SpecialEntry[]>(specialPredictions)
   const [markingSpecial, setMarkingSpecial] = useState<Record<string, boolean>>({})
 
+  // Kill-switch da atualização automática de placares via API.
+  const [autoSync, setAutoSync] = useState(copaConfig['auto_sync_enabled'] !== 'false')
+  const [togglingSync, setTogglingSync] = useState(false)
+  const lastSync = games
+    .map((g) => g.last_synced_at)
+    .filter(Boolean)
+    .sort()
+    .pop()
+
   const now = new Date()
+
+  const handleToggleSync = async () => {
+    const next = !autoSync
+    setTogglingSync(true)
+    const res = await fetch('/api/admin/toggle-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    })
+    setTogglingSync(false)
+    if (res.ok) {
+      setAutoSync(next)
+      router.refresh()
+    } else {
+      const d = await res.json().catch(() => ({}))
+      alert(d.error || 'Erro ao alternar atualização automática.')
+    }
+  }
 
   const handleUserStatus = async (userId: string, status: 'approved' | 'rejected') => {
     setSavingUser((prev) => ({ ...prev, [userId]: true }))
@@ -567,6 +594,35 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
 
   return (
     <div>
+      {/* Atualização automática de placares (kill-switch) */}
+      <div className={`rounded-xl p-4 mb-6 flex items-center justify-between gap-4 flex-wrap border ${
+        autoSync ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+      }`}>
+        <div>
+          <p className="font-bold text-gray-800">
+            {autoSync ? '🟢 Atualização automática LIGADA' : '🔴 Atualização automática DESLIGADA'}
+          </p>
+          <p className="text-xs text-gray-500">
+            {autoSync
+              ? 'Os placares dos jogos ao vivo são buscados na API e o ranking se atualiza sozinho.'
+              : 'A API não está sendo chamada. Lance os resultados manualmente nas abas abaixo.'}
+            {lastSync && (
+              <> {' • '}Última sincronização:{' '}
+                {new Date(lastSync).toLocaleString('pt-BR', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })}
+              </>
+            )}
+          </p>
+        </div>
+        <button onClick={handleToggleSync} disabled={togglingSync}
+          className={`text-white text-sm font-bold px-4 py-2 rounded-lg disabled:opacity-50 ${
+            autoSync ? 'bg-red-500 hover:bg-red-600' : 'bg-green-700 hover:bg-green-800'
+          }`}>
+          {togglingSync ? '...' : autoSync ? 'Desligar' : 'Ligar'}
+        </button>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
         <button onClick={() => setActiveTab('users')}

@@ -24,6 +24,10 @@ export interface Game {
   gols_fora_real: number | null
   resultado_lancado: boolean
   created_at: string
+  // Sincronização automática de placar (API Football-Data.org)
+  status?: 'SCHEDULED' | 'LIVE' | 'FINISHED'
+  external_match_id?: number | null
+  last_synced_at?: string | null
   // Mata-mata (nulos na fase de grupos)
   match_code?: string | null
   slot_casa?: string | null
