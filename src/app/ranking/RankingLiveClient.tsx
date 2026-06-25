@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import { Game } from '@/types'
@@ -11,6 +11,8 @@ export interface RankEntry {
   user_id: string
   nome: string
   total_pontos: number
+  // Pontos considerando só jogos encerrados — base para as setas ↑/↓.
+  total_pontos_fechado: number
   acertos_exatos: number
   acertos_resultado: number
   acertos_parciais: number
@@ -25,24 +27,26 @@ interface Props {
   melhorJogadorPontos: string
 }
 
-function sortRanking(rows: RankEntry[]): RankEntry[] {
+// Ordena por uma pontuação escolhida, com os mesmos critérios de desempate.
+function sortBy(rows: RankEntry[], pts: (r: RankEntry) => number): RankEntry[] {
   return rows.slice().sort((a, b) => {
-    if (b.total_pontos !== a.total_pontos) return b.total_pontos - a.total_pontos
+    if (pts(b) !== pts(a)) return pts(b) - pts(a)
     if (b.acertos_exatos !== a.acertos_exatos) return b.acertos_exatos - a.acertos_exatos
     if (b.acertos_resultado !== a.acertos_resultado) return b.acertos_resultado - a.acertos_resultado
     return b.acertos_parciais - a.acertos_parciais
   })
 }
 
-const POLL_MS = 30000
+const sortRanking = (rows: RankEntry[]) => sortBy(rows, (r) => r.total_pontos)
 
-type LiveGame = Pick<Game, 'id' | 'data_hora' | 'resultado_lancado' | 'fase'>
-
-// Quantos jogos estão em andamento agora (mesmo sinal do selo "AO VIVO").
-function countLive(gs: LiveGame[]): number {
-  const t = new Date()
-  return gs.filter((g) => getGameStatus(g as Game, t) === 'em_andamento').length
+// Índice de cada participante na classificação FECHADA (só jogos encerrados).
+function closedPositions(rows: RankEntry[]): Record<string, number> {
+  return Object.fromEntries(
+    sortBy(rows, (r) => r.total_pontos_fechado).map((e, i) => [e.user_id, i]),
+  )
 }
+
+const POLL_MS = 30000
 
 export default function RankingLiveClient({
   initialRanking,
@@ -54,19 +58,13 @@ export default function RankingLiveClient({
   const supabase = createClient()
   const [ranking, setRanking] = useState<RankEntry[]>(sortRanking(initialRanking))
   const [liveGames, setLiveGames] = useState(games)
-  const [movement, setMovement] = useState<Record<string, 'up' | 'down'>>({})
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [now, setNow] = useState<Date>(new Date())
 
-  // Baseline da SESSÃO AO VIVO: posições no momento em que um jogo começou.
-  // As setas comparam a posição atual com esse baseline (movimento líquido
-  // durante o jogo) e somem quando não há mais nenhum jogo rolando.
-  const liveBaseline = useRef<Record<string, number> | null>(
-    countLive(games) > 0
-      ? Object.fromEntries(sortRanking(initialRanking).map((e, i) => [e.user_id, i]))
-      : null,
-  )
+  // Setas relativas à classificação fechada (ver closedPositions): derivadas
+  // direto de `ranking`, sem estado próprio.
+  const closedPos = closedPositions(ranking)
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
@@ -75,41 +73,24 @@ export default function RankingLiveClient({
       supabase.from('games').select('id, data_hora, resultado_lancado, fase'),
     ])
 
-    const freshGames = (gameRows as Props['games']) ?? []
-    const liveNow = countLive(freshGames)
-
     if (rankRows) {
-      const mapped: RankEntry[] = (rankRows as Record<string, unknown>[]).map((r) => ({
-        user_id: r.user_id as string,
-        nome: r.nome as string,
-        total_pontos: Number(r.total_pontos ?? 0),
-        acertos_exatos: Number(r.acertos_exatos ?? 0),
-        acertos_resultado: Number(r.acertos_resultado ?? 0),
-        acertos_parciais: Number(r.acertos_parciais ?? 0),
-        total_palpites: Number(r.total_palpites ?? 0),
-      }))
-      const sorted = sortRanking(mapped)
-
-      // Setas só durante o jogo: compara a posição atual com o baseline da
-      // sessão ao vivo. Sem jogo rolando, zera o baseline e some com as setas.
-      const newMovement: Record<string, 'up' | 'down'> = {}
-      if (liveNow > 0) {
-        const positions = Object.fromEntries(sorted.map((e, i) => [e.user_id, i]))
-        if (liveBaseline.current === null) {
-          liveBaseline.current = positions
-        } else {
-          sorted.forEach((e, i) => {
-            const base = liveBaseline.current![e.user_id]
-            if (base !== undefined && base !== i) {
-              newMovement[e.user_id] = i < base ? 'up' : 'down'
-            }
-          })
+      const mapped: RankEntry[] = (rankRows as Record<string, unknown>[]).map((r) => {
+        const total = Number(r.total_pontos ?? 0)
+        // Fallback: se a migração ainda não criou a coluna, usa o total atual
+        // (fechado == atual → sem setas, degrada com segurança).
+        const fechado = r.total_pontos_fechado == null ? total : Number(r.total_pontos_fechado)
+        return {
+          user_id: r.user_id as string,
+          nome: r.nome as string,
+          total_pontos: total,
+          total_pontos_fechado: fechado,
+          acertos_exatos: Number(r.acertos_exatos ?? 0),
+          acertos_resultado: Number(r.acertos_resultado ?? 0),
+          acertos_parciais: Number(r.acertos_parciais ?? 0),
+          total_palpites: Number(r.total_palpites ?? 0),
         }
-      } else {
-        liveBaseline.current = null
-      }
-      setRanking(sorted)
-      setMovement(newMovement)
+      })
+      setRanking(sortRanking(mapped))
       setUpdatedAt(new Date())
     }
 
@@ -217,7 +198,9 @@ export default function RankingLiveClient({
               ) : (
                 ranking.map((entry, idx) => {
                   const isMe = entry.user_id === currentUserId
-                  const move = movement[entry.user_id]
+                  const base = closedPos[entry.user_id]
+                  const move: 'up' | 'down' | undefined =
+                    base === undefined || base === idx ? undefined : idx < base ? 'up' : 'down'
                   return (
                     <tr
                       key={entry.user_id}
