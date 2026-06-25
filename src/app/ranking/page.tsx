@@ -42,15 +42,21 @@ export default async function RankingPage() {
 
   // A agregação é feita no banco (função get_ranking) para evitar o teto de
   // 1000 linhas do PostgREST, que truncava os palpites e zerava o ranking.
-  const ranking: RankEntry[] = (rankingRows || []).map((r: Record<string, unknown>) => ({
-    user_id: r.user_id as string,
-    nome: r.nome as string,
-    total_pontos: Number(r.total_pontos ?? 0),
-    acertos_exatos: Number(r.acertos_exatos ?? 0),
-    acertos_resultado: Number(r.acertos_resultado ?? 0),
-    acertos_parciais: Number(r.acertos_parciais ?? 0),
-    total_palpites: Number(r.total_palpites ?? 0),
-  }))
+  const ranking: RankEntry[] = (rankingRows || []).map((r: Record<string, unknown>) => {
+    const total = Number(r.total_pontos ?? 0)
+    // Fallback caso a migração 0002 ainda não tenha criado a coluna.
+    const fechado = r.total_pontos_fechado == null ? total : Number(r.total_pontos_fechado)
+    return {
+      user_id: r.user_id as string,
+      nome: r.nome as string,
+      total_pontos: total,
+      total_pontos_fechado: fechado,
+      acertos_exatos: Number(r.acertos_exatos ?? 0),
+      acertos_resultado: Number(r.acertos_resultado ?? 0),
+      acertos_parciais: Number(r.acertos_parciais ?? 0),
+      total_palpites: Number(r.total_palpites ?? 0),
+    }
+  })
 
   // Jogos (apenas campos necessários) para detectar "ao vivo" no client.
   const { data: gameRows } = await supabase
