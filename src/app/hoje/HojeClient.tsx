@@ -100,18 +100,31 @@ export default function HojeClient({
                     <div className="font-bold text-gray-800 text-sm mt-1">{game.time_casa}</div>
                   </div>
 
-                  <div className="flex flex-col items-center min-w-[70px]">
-                    {game.resultado_lancado ? (
-                      <div className="text-3xl font-extrabold text-green-700 leading-none">
-                        {game.gols_casa_real} <span className="text-gray-300">×</span> {game.gols_fora_real}
+                  {(() => {
+                    const hasScore = game.gols_casa_real != null && game.gols_fora_real != null
+                    const isLive = game.status === 'LIVE' && hasScore && !game.resultado_lancado
+                    const showScore = game.resultado_lancado || isLive
+                    return (
+                      <div className="flex flex-col items-center min-w-[70px]">
+                        {showScore ? (
+                          <div className={`text-3xl font-extrabold leading-none ${isLive ? 'text-red-600' : 'text-green-700'}`}>
+                            {game.gols_casa_real} <span className="text-gray-300">×</span> {game.gols_fora_real}
+                          </div>
+                        ) : (
+                          <div className="text-2xl font-bold text-gray-300 leading-none">× </div>
+                        )}
+                        {isLive && (
+                          <span className="text-[10px] text-red-600 mt-1 uppercase tracking-wide font-bold flex items-center gap-1">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            ao vivo
+                          </span>
+                        )}
+                        {game.resultado_lancado && (
+                          <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">resultado</span>
+                        )}
                       </div>
-                    ) : (
-                      <div className="text-2xl font-bold text-gray-300 leading-none">× </div>
-                    )}
-                    {game.resultado_lancado && (
-                      <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">resultado</span>
-                    )}
-                  </div>
+                    )
+                  })()}
 
                   <div className="flex-1 text-left">
                     <div className="text-2xl leading-none">{game.bandeira_fora}</div>
