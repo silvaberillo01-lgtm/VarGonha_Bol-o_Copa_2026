@@ -79,6 +79,11 @@ export default function HojeClient({
           const locked = isGameLocked(game, now)
           const preds = predsForGame(game.id)
           const myPred = preds.find((p) => p.user_id === currentUserId)
+          // Pontos parciais: durante o jogo ao vivo já mostramos quanto cada um
+          // está ganhando (a rota de sync recalcula predictions.pontos ao vivo).
+          const hasScore = game.gols_casa_real != null && game.gols_fora_real != null
+          const isLive = game.status === 'LIVE' && hasScore && !game.resultado_lancado
+          const mostrarPontos = game.resultado_lancado || isLive
 
           return (
             <div key={game.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -157,8 +162,13 @@ export default function HojeClient({
               {/* Palpites dos participantes */}
               <div className="px-4 py-3 bg-gray-50/60">
                 <div className="flex items-center justify-between mb-2 gap-2">
-                  <div className="text-xs font-bold text-gray-500">
+                  <div className="text-xs font-bold text-gray-500 flex items-center gap-2">
                     👥 Palpites ({preds.length})
+                    {isLive && (
+                      <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 normal-case">
+                        pontuação parcial
+                      </span>
+                    )}
                   </div>
                   {locked && preds.length > 0 && (
                     <ShareCardButton
@@ -206,7 +216,7 @@ export default function HojeClient({
                       .sort((a, b) => nomeById(a.user_id).localeCompare(nomeById(b.user_id)))
                       .map((p) => {
                         const isMe = p.user_id === currentUserId
-                        const acertou = game.resultado_lancado
+                        const acertou = mostrarPontos
                         return (
                           <div
                             key={p.id}
