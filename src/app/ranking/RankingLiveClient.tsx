@@ -36,6 +36,14 @@ function sortRanking(rows: RankEntry[]): RankEntry[] {
 
 const POLL_MS = 30000
 
+type LiveGame = Pick<Game, 'id' | 'data_hora' | 'resultado_lancado' | 'fase'>
+
+// Quantos jogos estão em andamento agora (mesmo sinal do selo "AO VIVO").
+function countLive(gs: LiveGame[]): number {
+  const t = new Date()
+  return gs.filter((g) => getGameStatus(g as Game, t) === 'em_andamento').length
+}
+
 export default function RankingLiveClient({
   initialRanking,
   games,
@@ -51,9 +59,13 @@ export default function RankingLiveClient({
   const [refreshing, setRefreshing] = useState(false)
   const [now, setNow] = useState<Date>(new Date())
 
-  // posições anteriores para calcular as setas
-  const prevPositions = useRef<Record<string, number>>(
-    Object.fromEntries(sortRanking(initialRanking).map((e, i) => [e.user_id, i])),
+  // Baseline da SESSÃO AO VIVO: posições no momento em que um jogo começou.
+  // As setas comparam a posição atual com esse baseline (movimento líquido
+  // durante o jogo) e somem quando não há mais nenhum jogo rolando.
+  const liveBaseline = useRef<Record<string, number> | null>(
+    countLive(games) > 0
+      ? Object.fromEntries(sortRanking(initialRanking).map((e, i) => [e.user_id, i]))
+      : null,
   )
 
   const refresh = useCallback(async () => {
@@ -62,6 +74,9 @@ export default function RankingLiveClient({
       supabase.rpc('get_ranking'),
       supabase.from('games').select('id, data_hora, resultado_lancado, fase'),
     ])
+
+    const freshGames = (gameRows as Props['games']) ?? []
+    const liveNow = countLive(freshGames)
 
     if (rankRows) {
       const mapped: RankEntry[] = (rankRows as Record<string, unknown>[]).map((r) => ({
@@ -75,15 +90,24 @@ export default function RankingLiveClient({
       }))
       const sorted = sortRanking(mapped)
 
-      // calcula movimento comparando com a posição anterior
+      // Setas só durante o jogo: compara a posição atual com o baseline da
+      // sessão ao vivo. Sem jogo rolando, zera o baseline e some com as setas.
       const newMovement: Record<string, 'up' | 'down'> = {}
-      sorted.forEach((e, i) => {
-        const prev = prevPositions.current[e.user_id]
-        if (prev !== undefined && prev !== i) {
-          newMovement[e.user_id] = i < prev ? 'up' : 'down'
+      if (liveNow > 0) {
+        const positions = Object.fromEntries(sorted.map((e, i) => [e.user_id, i]))
+        if (liveBaseline.current === null) {
+          liveBaseline.current = positions
+        } else {
+          sorted.forEach((e, i) => {
+            const base = liveBaseline.current![e.user_id]
+            if (base !== undefined && base !== i) {
+              newMovement[e.user_id] = i < base ? 'up' : 'down'
+            }
+          })
         }
-      })
-      prevPositions.current = Object.fromEntries(sorted.map((e, i) => [e.user_id, i]))
+      } else {
+        liveBaseline.current = null
+      }
       setRanking(sorted)
       setMovement(newMovement)
       setUpdatedAt(new Date())
