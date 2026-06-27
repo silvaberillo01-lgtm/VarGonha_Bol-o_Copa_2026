@@ -40,7 +40,15 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   const [activeTab, setActiveTab] = useState<Tab>('users')
   const [localUsers, setLocalUsers] = useState<Profile[]>(users)
   const [localGames, setLocalGames] = useState<Game[]>(games)
-  const [results, setResults] = useState<Record<string, { casa: string; fora: string }>>({})
+  const [results, setResults] = useState<Record<string, { casa: string; fora: string }>>(() => {
+    const init: Record<string, { casa: string; fora: string }> = {}
+    games.forEach((g) => {
+      if (g.gols_casa_real != null && g.gols_fora_real != null) {
+        init[g.id] = { casa: String(g.gols_casa_real), fora: String(g.gols_fora_real) }
+      }
+    })
+    return init
+  })
   const [savingUser, setSavingUser] = useState<Record<string, boolean>>({})
   const [savingGame, setSavingGame] = useState<Record<string, boolean>>({})
   const [savedGame, setSavedGame] = useState<Record<string, boolean>>({})
@@ -584,7 +592,7 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
           </div>
         </div>
         {msg && (
-          <p className={`text-xs mt-2 ${isSaved || game.resultado_lancado ? 'text-green-600' : 'text-red-500'}`}>
+          <p className={`text-xs mt-2 ${isSaved || msg.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>
             {msg}
           </p>
         )}
