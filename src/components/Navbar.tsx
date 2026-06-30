@@ -12,6 +12,7 @@ interface NavbarProps {
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: '/dashboard', label: '⚽ Palpitar' },
   { href: '/hoje', label: '🗓️ Hoje' },
+  { href: '/chaveamento', label: '🗺️ Chave' },
   { href: '/ranking', label: '📊 Ranking' },
   { href: '/champion', label: '🥇 Campeão' },
   { href: '/palpites', label: '👁️ Palpites' },

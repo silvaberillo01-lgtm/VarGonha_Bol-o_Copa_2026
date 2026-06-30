@@ -5,6 +5,7 @@ import { Game, Prediction, SpecialPrediction } from '@/types'
 import { DEADLINE_FASE1, DEADLINE_CAMPEAO, getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import { knockoutLockTime } from '@/lib/match-utils'
 import { computeUserBracket, GroupGameResult, KnockoutPick, ResolvedMatch } from '@/lib/bracket'
+import { normalizeTeam, isSelecao } from '@/lib/teams'
 
 interface ChampionPred {
   selecao: string
@@ -142,8 +143,23 @@ export default function ParticipanteClient({
     const resolved = bracket[num]
     const pred = getPrediction(game.id)
     const locked = isKnockoutLocked(game)
-    const casaTeam = game.resultado_lancado ? game.time_casa : resolved?.time_casa
-    const foraTeam = game.resultado_lancado ? game.time_fora : resolved?.time_fora
+    // Times reais (quando o confronto já está definido) vs projeção do chaveamento.
+    const realCasa = isSelecao(game.time_casa) ? (normalizeTeam(game.time_casa) as string) : null
+    const realFora = isSelecao(game.time_fora) ? (normalizeTeam(game.time_fora) as string) : null
+    const realKnown = !!realCasa && !!realFora
+    const casaTeam = game.resultado_lancado ? game.time_casa : realKnown ? realCasa : resolved?.time_casa
+    const foraTeam = game.resultado_lancado ? game.time_fora : realKnown ? realFora : resolved?.time_fora
+    // A previsão do chaveamento deste participante divergiu do confronto real?
+    const bracketMiss =
+      (realKnown || game.resultado_lancado) && !!pred &&
+      (normalizeTeam(pred.time_casa_palpite) !== normalizeTeam(casaTeam) ||
+        normalizeTeam(pred.time_fora_palpite) !== normalizeTeam(foraTeam))
+    // Time exibido no lado em que apostou que passava (mapeado do derivado).
+    const pickedTeam = pred?.classificado_palpite
+      ? normalizeTeam(pred.classificado_palpite) === normalizeTeam(pred.time_casa_palpite)
+        ? casaTeam
+        : foraTeam
+      : null
 
     return (
       <div key={game.id} className={`bg-white rounded-xl shadow-sm border-2 p-5 ${game.resultado_lancado ? 'border-gray-200' : locked ? 'border-green-200' : 'border-gray-200'}`}>
@@ -159,7 +175,7 @@ export default function ParticipanteClient({
         ) : (
           <>
             <div className="flex items-center justify-center gap-3 text-sm">
-              <span className="font-bold text-gray-800">{pred?.time_casa_palpite || casaTeam || '—'}</span>
+              <span className="font-bold text-gray-800">{casaTeam || '—'}</span>
               {pred ? (
                 <span className="flex items-center gap-2 font-bold text-green-800">
                   <span className="w-9 h-9 flex items-center justify-center bg-green-50 border border-green-200 rounded-lg">{pred.gols_casa}</span>
@@ -167,11 +183,17 @@ export default function ParticipanteClient({
                   <span className="w-9 h-9 flex items-center justify-center bg-green-50 border border-green-200 rounded-lg">{pred.gols_fora}</span>
                 </span>
               ) : <span className="text-gray-400 text-xs">— Sem palpite —</span>}
-              <span className="font-bold text-gray-800">{pred?.time_fora_palpite || foraTeam || '—'}</span>
+              <span className="font-bold text-gray-800">{foraTeam || '—'}</span>
             </div>
 
-            {pred?.classificado_palpite && (
-              <div className="mt-1 text-center text-xs text-gray-500">Passa: <strong>{pred.classificado_palpite}</strong></div>
+            {pickedTeam && (
+              <div className="mt-1 text-center text-xs text-gray-500">Passa: <strong>{pickedTeam}</strong></div>
+            )}
+
+            {bracketMiss && (
+              <div className="mt-1 text-center text-[11px] text-amber-600">
+                Chaveamento previa: {pred?.time_casa_palpite} × {pred?.time_fora_palpite}
+              </div>
             )}
 
             {game.resultado_lancado && (

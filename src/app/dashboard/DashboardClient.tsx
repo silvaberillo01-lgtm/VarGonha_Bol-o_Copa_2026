@@ -5,6 +5,7 @@ import { Game, Prediction } from '@/types'
 import { DEADLINE_FASE1, getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import { knockoutLockTime } from '@/lib/match-utils'
 import { computeUserBracket, GroupGameResult, KnockoutPick, ResolvedMatch } from '@/lib/bracket'
+import { normalizeTeam, isSelecao } from '@/lib/teams'
 
 interface Props {
   games: Game[]
@@ -293,18 +294,52 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const localPred = getLocalPred(game.id)
     const isLocked = isKnockoutLocked(game)
 
-    // Antes do resultado, mostra o confronto derivado do usuário; depois, o real.
-    const casaTeam = game.resultado_lancado ? game.time_casa : resolved?.time_casa
-    const foraTeam = game.resultado_lancado ? game.time_fora : resolved?.time_fora
-    const undecided = !game.resultado_lancado && (!casaTeam || !foraTeam)
-    // Campeão sempre avança: se o campeão palpitado está no confronto, ele é
-    // forçado como "quem passa" (não editável) em qualquer fase.
+    // Times derivados do chaveamento do PRÓPRIO usuário (base da pontuação).
+    const derivedCasa = resolved?.time_casa ?? null
+    const derivedFora = resolved?.time_fora ?? null
+    // Times REAIS do confronto (quando o admin já definiu quem passou de fato).
+    const realCasa = isSelecao(game.time_casa) ? (normalizeTeam(game.time_casa) as string) : null
+    const realFora = isSelecao(game.time_fora) ? (normalizeTeam(game.time_fora) as string) : null
+
+    // Mostra os times REAIS para palpitar quando: (1) o admin já definiu o
+    // confronto e (2) o chaveamento do usuário também resolveu este jogo — assim
+    // conseguimos mapear o "quem passa" ao lado certo sem mudar a pontuação.
+    const showReal = !game.resultado_lancado && !!realCasa && !!realFora && !!derivedCasa && !!derivedFora
+
+    // Rótulos exibidos (reais quando showReal); a lógica/pontuação segue derivada.
+    const betCasa = game.resultado_lancado ? game.time_casa : showReal ? realCasa : derivedCasa
+    const betFora = game.resultado_lancado ? game.time_fora : showReal ? realFora : derivedFora
+    const undecided = !game.resultado_lancado && (!betCasa || !betFora)
+
+    // Campeão sempre avança: se o campeão palpitado está no confronto (derivado),
+    // ele é forçado como "quem passa" (não editável) em qualquer fase.
     const forcedChamp =
-      champion && (champion === casaTeam || champion === foraTeam) ? champion : null
+      champion && (champion === derivedCasa || champion === derivedFora) ? champion : null
     const classificado = forcedChamp ?? localClassificado[game.id] ?? undefined
     const casa = parseInt(localPred.casa)
     const fora = parseInt(localPred.fora)
     const isDraw = !isNaN(casa) && !isNaN(fora) && casa === fora
+
+    // Seletor "quem passa": rótulo é o time real (quando showReal), mas o valor
+    // gravado é sempre o time DERIVADO daquele lado (mantém a pontuação intacta).
+    const sides = [
+      { label: betCasa, pick: derivedCasa },
+      { label: betFora, pick: derivedFora },
+    ]
+    const mismatch = showReal && (derivedCasa !== realCasa || derivedFora !== realFora)
+    const acertosClass = (derivedCasa === realCasa ? 1 : 0) + (derivedFora === realFora ? 1 : 0)
+
+    // Após o resultado: a previsão do chaveamento bateu com o confronto real?
+    const bracketMissReal =
+      game.resultado_lancado && !!existingPred &&
+      (normalizeTeam(existingPred.time_casa_palpite) !== normalizeTeam(game.time_casa) ||
+        normalizeTeam(existingPred.time_fora_palpite) !== normalizeTeam(game.time_fora))
+    // Time real do lado em que o usuário apostou que passava (mapeado do derivado).
+    const pickedRealTeam = existingPred?.classificado_palpite
+      ? normalizeTeam(existingPred.classificado_palpite) === normalizeTeam(existingPred.time_casa_palpite)
+        ? game.time_casa
+        : game.time_fora
+      : null
 
     return (
       <div key={game.id}
@@ -329,7 +364,7 @@ export default function DashboardClient({ games, predictions, champion }: Props)
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <div className="flex-1 text-right font-bold text-gray-800 text-sm">{casaTeam}</div>
+              <div className="flex-1 text-right font-bold text-gray-800 text-sm">{betCasa}</div>
               <div className="flex items-center gap-2">
                 {game.resultado_lancado ? (
                   <div className="flex flex-col items-center gap-1">
@@ -358,8 +393,18 @@ export default function DashboardClient({ games, predictions, champion }: Props)
                   </div>
                 )}
               </div>
-              <div className="flex-1 text-left font-bold text-gray-800 text-sm">{foraTeam}</div>
+              <div className="flex-1 text-left font-bold text-gray-800 text-sm">{betFora}</div>
             </div>
+
+            {/* Aviso: confronto real diferente do que o chaveamento do usuário previu */}
+            {mismatch && (
+              <div className="mt-3 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
+                ⚠️ Você está palpitando no <strong>jogo real</strong>. Seu chaveamento previa{' '}
+                <strong>{derivedCasa} × {derivedFora}</strong>, mas quem passou foi{' '}
+                <strong>{realCasa} × {realFora}</strong>. Você pontua pelo placar, mas como acertou{' '}
+                {acertosClass}/2 dos classificados, <strong>não terá a pontuação máxima</strong> deste jogo.
+              </div>
+            )}
 
             {/* Quem se classifica (pênaltis em caso de empate) */}
             {!game.resultado_lancado && !isLocked && (
@@ -369,13 +414,13 @@ export default function DashboardClient({ games, predictions, champion }: Props)
                     : isDraw ? '🥅 Empate — quem passa nos pênaltis?' : 'Quem se classifica'}
                 </p>
                 <div className="flex gap-2 justify-center">
-                  {[casaTeam, foraTeam].map((t) => (
-                    <button key={t} type="button"
-                      onClick={() => { if (forcedChamp) return; setLocalClassificado((c) => ({ ...c, [game.id]: t as string })); setSaved((s) => ({ ...s, [game.id]: false })) }}
-                      disabled={!!forcedChamp ? classificado !== t : (!isDraw && classificado === t)}
+                  {sides.map((s) => (
+                    <button key={(s.pick ?? s.label) as string} type="button"
+                      onClick={() => { if (forcedChamp) return; setLocalClassificado((c) => ({ ...c, [game.id]: s.pick as string })); setSaved((st) => ({ ...st, [game.id]: false })) }}
+                      disabled={!!forcedChamp ? classificado !== s.pick : (!isDraw && classificado === s.pick)}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors ${
-                        classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'} ${forcedChamp && classificado !== t ? 'opacity-40' : ''}`}>
-                      {t}
+                        classificado === s.pick ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'} ${forcedChamp && classificado !== s.pick ? 'opacity-40' : ''}`}>
+                      {s.label}
                     </button>
                   ))}
                 </div>
@@ -397,9 +442,14 @@ export default function DashboardClient({ games, predictions, champion }: Props)
                   {getTipoAcertoMataMata(existingPred.pontos)} • {existingPred.pontos} pts
                 </span>
                 <div className="text-xs text-gray-500 mt-1">
-                  Seu palpite: {existingPred.time_casa_palpite} {existingPred.gols_casa} × {existingPred.gols_fora} {existingPred.time_fora_palpite}
-                  {existingPred.classificado_palpite ? ` (passa: ${existingPred.classificado_palpite})` : ''}
+                  Seu palpite: <strong>{game.time_casa} {existingPred.gols_casa} × {existingPred.gols_fora} {game.time_fora}</strong>
+                  {pickedRealTeam ? ` (você apostou que passava: ${pickedRealTeam})` : ''}
                 </div>
+                {bracketMissReal && (
+                  <div className="text-[11px] text-amber-600 mt-0.5">
+                    Seu chaveamento previa {existingPred.time_casa_palpite} × {existingPred.time_fora_palpite}
+                  </div>
+                )}
               </div>
             )}
           </>
