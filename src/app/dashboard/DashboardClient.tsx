@@ -329,14 +329,11 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const realCasa = isSelecao(realCasaRaw) ? (normalizeTeam(realCasaRaw) as string) : null
     const realFora = isSelecao(realForaRaw) ? (normalizeTeam(realForaRaw) as string) : null
 
-    // Mostra os times REAIS para palpitar quando: (1) o admin já definiu o
-    // confronto e (2) o chaveamento do usuário também resolveu este jogo — assim
-    // conseguimos mapear o "quem passa" ao lado certo sem mudar a pontuação.
-    const showReal = !game.resultado_lancado && !!realCasa && !!realFora && !!derivedCasa && !!derivedFora
-
-    // Rótulos exibidos (reais quando showReal); a lógica/pontuação segue derivada.
-    const betCasa = game.resultado_lancado ? game.time_casa : showReal ? realCasa : derivedCasa
-    const betFora = game.resultado_lancado ? game.time_fora : showReal ? realFora : derivedFora
+    // Times exibidos para palpitar: cada lado vira o time REAL assim que o jogo
+    // que o alimenta termina (independente do outro lado); na falta, segue a
+    // projeção do chaveamento do usuário. A pontuação continua usando o derivado.
+    const betCasa = game.resultado_lancado ? game.time_casa : realCasa ?? derivedCasa
+    const betFora = game.resultado_lancado ? game.time_fora : realFora ?? derivedFora
     const undecided = !game.resultado_lancado && (!betCasa || !betFora)
 
     // Campeão sempre avança: se o campeão palpitado está no confronto (derivado),
@@ -348,14 +345,19 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     const fora = parseInt(localPred.fora)
     const isDraw = !isNaN(casa) && !isNaN(fora) && casa === fora
 
-    // Seletor "quem passa": rótulo é o time real (quando showReal), mas o valor
-    // gravado é sempre o time DERIVADO daquele lado (mantém a pontuação intacta).
+    // Seletor "quem passa": rótulo é o time exibido, mas o valor gravado é sempre
+    // o time DERIVADO daquele lado (mantém a pontuação intacta).
     const sides = [
       { label: betCasa, pick: derivedCasa },
       { label: betFora, pick: derivedFora },
     ]
-    const mismatch = showReal && (derivedCasa !== realCasa || derivedFora !== realFora)
-    const acertosClass = (derivedCasa === realCasa ? 1 : 0) + (derivedFora === realFora ? 1 : 0)
+    // Lados já confirmados (jogo alimentador encerrado) que ficaram diferentes do
+    // que o chaveamento do usuário previa.
+    const casaMiss = !!realCasa && realCasa !== derivedCasa
+    const foraMiss = !!realFora && realFora !== derivedFora
+    const bothReal = !!realCasa && !!realFora
+    const mismatch = !game.resultado_lancado && (casaMiss || foraMiss)
+    const acertosClass = (realCasa === derivedCasa ? 1 : 0) + (realFora === derivedFora ? 1 : 0)
 
     // Após o resultado: a previsão do chaveamento bateu com o confronto real?
     const bracketMissReal =
@@ -428,9 +430,15 @@ export default function DashboardClient({ games, predictions, champion }: Props)
             {mismatch && (
               <div className="mt-3 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 leading-relaxed">
                 ⚠️ Você está palpitando no <strong>jogo real</strong>. Seu chaveamento previa{' '}
-                <strong>{derivedCasa} × {derivedFora}</strong>, mas quem passou foi{' '}
-                <strong>{realCasa} × {realFora}</strong>. Você pontua pelo placar, mas como acertou{' '}
-                {acertosClass}/2 dos classificados, <strong>não terá a pontuação máxima</strong> deste jogo.
+                <strong>{derivedCasa} × {derivedFora}</strong>; o confronto real é{' '}
+                <strong>{realCasa ?? 'a definir'} × {realFora ?? 'a definir'}</strong>.{' '}
+                {bothReal ? (
+                  <>Você pontua pelo placar, mas como acertou {acertosClass}/2 dos classificados,{' '}
+                  <strong>não terá a pontuação máxima</strong> deste jogo.</>
+                ) : (
+                  <>Você pontua pelo placar, mas como já errou um dos classificados,{' '}
+                  <strong>não terá a pontuação máxima</strong> deste jogo.</>
+                )}
               </div>
             )}
 
