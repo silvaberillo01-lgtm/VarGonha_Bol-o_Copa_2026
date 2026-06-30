@@ -4,7 +4,14 @@ import { useState, useMemo } from 'react'
 import { Game, Prediction, SpecialPrediction } from '@/types'
 import { DEADLINE_FASE1, DEADLINE_CAMPEAO, getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import { knockoutLockTime } from '@/lib/match-utils'
-import { computeUserBracket, GroupGameResult, KnockoutPick, ResolvedMatch } from '@/lib/bracket'
+import {
+  computeUserBracket,
+  computeOfficialBracket,
+  GroupGameResult,
+  KnockoutPick,
+  ResolvedMatch,
+  OfficialGameInput,
+} from '@/lib/bracket'
 import { normalizeTeam, isSelecao } from '@/lib/teams'
 
 interface ChampionPred {
@@ -84,6 +91,23 @@ export default function ParticipanteClient({
     return computeUserBracket(groupResults, knockoutPicks, champion, fase32Teams)
   }, [predictions, groupGames, knockoutGames, champion])
 
+  // Chaveamento OFICIAL: vencedores reais dos 16 avos propagados para as fases
+  // seguintes (para mostrar o confronto real, não a projeção do participante).
+  const oficialBracket = useMemo(() => {
+    const inputs: OfficialGameInput[] = knockoutGames.map((g) => ({
+      num: numFromCode(g.match_code),
+      resultado_lancado: g.resultado_lancado,
+      time_casa: g.time_casa,
+      time_fora: g.time_fora,
+      classificado_real: g.classificado_real ?? null,
+      gols_casa_real: g.gols_casa_real,
+      gols_fora_real: g.gols_fora_real,
+      gols_penaltis_casa: g.gols_penaltis_casa ?? null,
+      gols_penaltis_fora: g.gols_penaltis_fora ?? null,
+    }))
+    return computeOfficialBracket(inputs)
+  }, [knockoutGames])
+
   const isGroupLocked = () => isPastGroupDeadline
   const isKnockoutLocked = (game: Game) =>
     new Date() > knockoutLockTime(game.data_hora) || game.resultado_lancado
@@ -143,9 +167,11 @@ export default function ParticipanteClient({
     const resolved = bracket[num]
     const pred = getPrediction(game.id)
     const locked = isKnockoutLocked(game)
-    // Times reais (quando o confronto já está definido) vs projeção do chaveamento.
-    const realCasa = isSelecao(game.time_casa) ? (normalizeTeam(game.time_casa) as string) : null
-    const realFora = isSelecao(game.time_fora) ? (normalizeTeam(game.time_fora) as string) : null
+    // Times reais resolvidos pelo chaveamento oficial (com fallback no jogo).
+    const realCasaRaw = oficialBracket[num]?.time_casa ?? (isSelecao(game.time_casa) ? game.time_casa : null)
+    const realForaRaw = oficialBracket[num]?.time_fora ?? (isSelecao(game.time_fora) ? game.time_fora : null)
+    const realCasa = isSelecao(realCasaRaw) ? (normalizeTeam(realCasaRaw) as string) : null
+    const realFora = isSelecao(realForaRaw) ? (normalizeTeam(realForaRaw) as string) : null
     const realKnown = !!realCasa && !!realFora
     const casaTeam = game.resultado_lancado ? game.time_casa : realKnown ? realCasa : resolved?.time_casa
     const foraTeam = game.resultado_lancado ? game.time_fora : realKnown ? realFora : resolved?.time_fora
