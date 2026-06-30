@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Game, Prediction } from '@/types'
-import { getTipoAcerto } from '@/lib/scoring'
+import { getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import {
   getGameStatus,
   statusLabel,
@@ -109,8 +109,9 @@ export default function HojeClient({
                     const hasScore = game.gols_casa_real != null && game.gols_fora_real != null
                     const isLive = game.status === 'LIVE' && hasScore && !game.resultado_lancado
                     const showScore = game.resultado_lancado || isLive
+                    const hasPenalty = game.gols_penaltis_casa != null && game.gols_penaltis_fora != null
                     return (
-                      <div className="flex flex-col items-center min-w-[70px]">
+                      <div className="flex flex-col items-center min-w-[80px]">
                         {showScore ? (
                           <div className={`text-3xl font-extrabold leading-none ${isLive ? 'text-red-600' : 'text-green-700'}`}>
                             {game.gols_casa_real} <span className="text-gray-300">×</span> {game.gols_fora_real}
@@ -124,8 +125,16 @@ export default function HojeClient({
                             ao vivo
                           </span>
                         )}
-                        {game.resultado_lancado && (
+                        {game.resultado_lancado && !hasPenalty && (
                           <span className="text-[10px] text-gray-400 mt-1 uppercase tracking-wide">resultado</span>
+                        )}
+                        {game.resultado_lancado && hasPenalty && (
+                          <div className="flex flex-col items-center mt-1 gap-0.5">
+                            <span className="text-[10px] text-gray-400 uppercase tracking-wide">tempo normal</span>
+                            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5">
+                              pên: {game.gols_penaltis_casa}–{game.gols_penaltis_fora}
+                            </span>
+                          </div>
                         )}
                       </div>
                     )
@@ -232,22 +241,26 @@ export default function HojeClient({
                               <span className="font-bold text-green-800">
                                 {p.gols_casa}×{p.gols_fora}
                               </span>
-                              {acertou && (
-                                <span
-                                  title={getTipoAcerto(p.pontos)}
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                    p.pontos === 15
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : p.pontos === 10
-                                      ? 'bg-green-100 text-green-700'
-                                      : p.pontos === 5
-                                      ? 'bg-blue-100 text-blue-700'
-                                      : 'bg-red-100 text-red-700'
-                                  }`}
-                                >
-                                  +{p.pontos}
-                                </span>
-                              )}
+                              {acertou && (() => {
+                                const isKo = game.fase !== 'grupos'
+                                const label = isKo ? getTipoAcertoMataMata(p.pontos) : getTipoAcerto(p.pontos)
+                                const topTier = isKo ? 15 : 15
+                                const midTier = isKo ? 7 : 10
+                                const lowTier = isKo ? 1 : 5
+                                const colorClass =
+                                  p.pontos >= topTier
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : p.pontos >= midTier
+                                    ? 'bg-green-100 text-green-700'
+                                    : p.pontos >= lowTier
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-red-100 text-red-700'
+                                return (
+                                  <span title={label} className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${colorClass}`}>
+                                    +{p.pontos}
+                                  </span>
+                                )
+                              })()}
                             </span>
                           </div>
                         )

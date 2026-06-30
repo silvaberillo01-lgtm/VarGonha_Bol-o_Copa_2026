@@ -31,6 +31,8 @@ export async function POST(request: Request) {
     time_casa_real,
     time_fora_real,
     classificado_real,
+    gols_penaltis_casa,
+    gols_penaltis_fora,
   } = await request.json()
 
   if (!game_id || gols_casa_real === undefined || gols_fora_real === undefined) {
@@ -80,6 +82,14 @@ export async function POST(request: Request) {
     gameUpdate.time_casa = timeCasaReal
     gameUpdate.time_fora = timeForaReal
     gameUpdate.classificado_real = classificadoReal
+    // Placar dos pênaltis (só quando há empate no tempo normal)
+    if (empate) {
+      gameUpdate.gols_penaltis_casa = gols_penaltis_casa ?? null
+      gameUpdate.gols_penaltis_fora = gols_penaltis_fora ?? null
+    } else {
+      gameUpdate.gols_penaltis_casa = null
+      gameUpdate.gols_penaltis_fora = null
+    }
   }
 
   const { error: gameError } = await adminSupabase

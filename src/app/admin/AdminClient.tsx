@@ -51,6 +51,7 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   // Edição dos jogos de mata-mata (times reais, placar, classificado, data)
   const [koEdits, setKoEdits] = useState<Record<string, {
     time_casa: string; time_fora: string; casa: string; fora: string; classificado: string; data_hora: string
+    penCasa: string; penFora: string
   }>>({})
   const [savingKo, setSavingKo] = useState<Record<string, boolean>>({})
   const [koMsg, setKoMsg] = useState<Record<string, string>>({})
@@ -322,6 +323,8 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
       fora: game.gols_fora_real != null ? String(game.gols_fora_real) : '',
       classificado: normalizeTeam(game.classificado_real) || '',
       data_hora: toLocal(game.data_hora),
+      penCasa: game.gols_penaltis_casa != null ? String(game.gols_penaltis_casa) : '',
+      penFora: game.gols_penaltis_fora != null ? String(game.gols_penaltis_fora) : '',
     }
   }
 
@@ -360,11 +363,15 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
     if (casa !== fora) classificado = casa > fora ? e.time_casa : e.time_fora
     if (!classificado) { setKoMsg((p) => ({ ...p, [game.id]: 'Empate: escolha quem se classificou (pênaltis).' })); return }
     setSavingKo((prev) => ({ ...prev, [game.id]: true }))
+    const penCasa = e.penCasa !== '' ? parseInt(e.penCasa) : undefined
+    const penFora = e.penFora !== '' ? parseInt(e.penFora) : undefined
     const res = await fetch('/api/admin/update-result', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         game_id: game.id, gols_casa_real: casa, gols_fora_real: fora,
         time_casa_real: e.time_casa, time_fora_real: e.time_fora, classificado_real: classificado,
+        gols_penaltis_casa: !isNaN(penCasa as number) ? penCasa : null,
+        gols_penaltis_fora: !isNaN(penFora as number) ? penFora : null,
       }),
     })
     setSavingKo((prev) => ({ ...prev, [game.id]: false }))
@@ -418,14 +425,27 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
             className="w-14 h-10 text-center text-lg font-bold border-2 border-green-300 rounded-lg" />
         </div>
         {isDraw && (
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-gray-500">Pênaltis — passa:</span>
-            {[e.time_casa, e.time_fora].filter(Boolean).map((t) => (
-              <button key={t} type="button" onClick={() => setKo(game.id, { classificado: t }, game)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 ${e.classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300'}`}>
-                {t}
-              </button>
-            ))}
+          <div className="space-y-2 mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Pênaltis — passa:</span>
+              {[e.time_casa, e.time_fora].filter(Boolean).map((t) => (
+                <button key={t} type="button" onClick={() => setKo(game.id, { classificado: t }, game)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 ${e.classificado === t ? 'bg-green-700 text-white border-green-700' : 'bg-white text-gray-600 border-gray-300'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Placar pênaltis:</span>
+              <input type="number" min="0" max="30" placeholder="-" value={e.penCasa}
+                onChange={(ev) => setKo(game.id, { penCasa: ev.target.value }, game)}
+                className="w-12 h-8 text-center text-sm font-bold border border-gray-300 rounded-lg" />
+              <span className="text-xs text-gray-400">×</span>
+              <input type="number" min="0" max="30" placeholder="-" value={e.penFora}
+                onChange={(ev) => setKo(game.id, { penFora: ev.target.value }, game)}
+                className="w-12 h-8 text-center text-sm font-bold border border-gray-300 rounded-lg" />
+              <span className="text-xs text-gray-400">(opcional)</span>
+            </div>
           </div>
         )}
         <div className="flex items-center gap-2">
