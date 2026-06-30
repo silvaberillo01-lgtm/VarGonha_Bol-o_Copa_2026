@@ -346,3 +346,86 @@ export function computeUserBracket(
 
   return out
 }
+
+// ---------------------------------------------------------------------------
+// Chaveamento OFICIAL (resultados reais lançados pelo admin).
+//
+// Diferente do bracket "por usuário": aqui os times da fase32 vêm dos jogos
+// reais e os classificados de cada fase propagam para a próxima conforme os
+// resultados forem saindo. Onde ainda não há resultado, o slot fica nulo
+// (a UI mostra um placeholder do tipo "Vencedor 73").
+// ---------------------------------------------------------------------------
+
+export interface OfficialGameInput {
+  num: number
+  resultado_lancado: boolean
+  time_casa: string | null
+  time_fora: string | null
+  classificado_real: string | null
+  gols_casa_real: number | null
+  gols_fora_real: number | null
+  gols_penaltis_casa?: number | null
+  gols_penaltis_fora?: number | null
+}
+
+export interface OfficialResolved {
+  num: number
+  fase: Fase
+  time_casa: string | null
+  time_fora: string | null
+  classificado: string | null
+  resultado_lancado: boolean
+  gols_casa: number | null
+  gols_fora: number | null
+  pen_casa: number | null
+  pen_fora: number | null
+}
+
+export function computeOfficialBracket(
+  inputs: OfficialGameInput[],
+): Record<number, OfficialResolved> {
+  const byNum = new Map(inputs.map((g) => [g.num, g]))
+  const winners: Record<number, string | null> = {}
+  const losers: Record<number, string | null> = {}
+  const out: Record<number, OfficialResolved> = {}
+
+  const resolve = (code: string): string | null => {
+    if (code.startsWith('W')) return winners[parseInt(code.slice(1))] ?? null
+    if (code.startsWith('L')) return losers[parseInt(code.slice(1))] ?? null
+    // Slots de grupo (1A/3ABC...) só aparecem na fase32, cujos times vêm
+    // diretamente dos jogos reais — então aqui não há o que resolver.
+    return null
+  }
+
+  for (const m of BRACKET_TEMPLATE) {
+    const g = byNum.get(m.num)
+    const isFase32 = m.fase === 'fase32'
+    const time_casa = isFase32 ? normalizeTeam(g?.time_casa ?? null) : resolve(m.slot_casa)
+    const time_fora = isFase32 ? normalizeTeam(g?.time_fora ?? null) : resolve(m.slot_fora)
+    const decided = !!(g && g.resultado_lancado)
+    const classificado = decided ? normalizeTeam(g!.classificado_real) : null
+
+    out[m.num] = {
+      num: m.num,
+      fase: m.fase,
+      time_casa,
+      time_fora,
+      classificado,
+      resultado_lancado: decided,
+      gols_casa: g?.gols_casa_real ?? null,
+      gols_fora: g?.gols_fora_real ?? null,
+      pen_casa: g?.gols_penaltis_casa ?? null,
+      pen_fora: g?.gols_penaltis_fora ?? null,
+    }
+
+    if (classificado && time_casa && time_fora) {
+      winners[m.num] = classificado
+      losers[m.num] = classificado === time_casa ? time_fora : time_casa
+    } else {
+      winners[m.num] = null
+      losers[m.num] = null
+    }
+  }
+
+  return out
+}
