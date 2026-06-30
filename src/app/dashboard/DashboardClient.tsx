@@ -4,7 +4,14 @@ import { useState, useEffect, useMemo } from 'react'
 import { Game, Prediction } from '@/types'
 import { DEADLINE_FASE1, getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import { knockoutLockTime } from '@/lib/match-utils'
-import { computeUserBracket, GroupGameResult, KnockoutPick, ResolvedMatch } from '@/lib/bracket'
+import {
+  computeUserBracket,
+  computeOfficialBracket,
+  GroupGameResult,
+  KnockoutPick,
+  ResolvedMatch,
+  OfficialGameInput,
+} from '@/lib/bracket'
 import { normalizeTeam, isSelecao } from '@/lib/teams'
 
 interface Props {
@@ -92,6 +99,24 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     })
     return computeUserBracket(groupResults, knockoutPicks, champion, fase32Teams)
   }, [predictions, groupGames, knockoutGames, localClassificado, champion])
+
+  // Chaveamento OFICIAL: propaga os vencedores REAIS dos 16 avos para os slots
+  // W## das fases seguintes. Assim os confrontos reais das oitavas+ aparecem
+  // automaticamente assim que os dois jogos que os alimentam são encerrados.
+  const oficialBracket = useMemo(() => {
+    const inputs: OfficialGameInput[] = knockoutGames.map((g) => ({
+      num: numFromCode(g.match_code),
+      resultado_lancado: g.resultado_lancado,
+      time_casa: g.time_casa,
+      time_fora: g.time_fora,
+      classificado_real: g.classificado_real ?? null,
+      gols_casa_real: g.gols_casa_real,
+      gols_fora_real: g.gols_fora_real,
+      gols_penaltis_casa: g.gols_penaltis_casa ?? null,
+      gols_penaltis_fora: g.gols_penaltis_fora ?? null,
+    }))
+    return computeOfficialBracket(inputs)
+  }, [knockoutGames])
 
   const isGroupLocked = (game: Game) => isPastGroupDeadline || game.resultado_lancado
   const isKnockoutLocked = (game: Game) =>
@@ -297,9 +322,12 @@ export default function DashboardClient({ games, predictions, champion }: Props)
     // Times derivados do chaveamento do PRÓPRIO usuário (base da pontuação).
     const derivedCasa = resolved?.time_casa ?? null
     const derivedFora = resolved?.time_fora ?? null
-    // Times REAIS do confronto (quando o admin já definiu quem passou de fato).
-    const realCasa = isSelecao(game.time_casa) ? (normalizeTeam(game.time_casa) as string) : null
-    const realFora = isSelecao(game.time_fora) ? (normalizeTeam(game.time_fora) as string) : null
+    // Times REAIS do confronto: resolvidos pelo chaveamento oficial (vencedores
+    // reais propagados dos 16 avos) e, na falta, pelo time já gravado no jogo.
+    const realCasaRaw = oficialBracket[num]?.time_casa ?? (isSelecao(game.time_casa) ? game.time_casa : null)
+    const realForaRaw = oficialBracket[num]?.time_fora ?? (isSelecao(game.time_fora) ? game.time_fora : null)
+    const realCasa = isSelecao(realCasaRaw) ? (normalizeTeam(realCasaRaw) as string) : null
+    const realFora = isSelecao(realForaRaw) ? (normalizeTeam(realForaRaw) as string) : null
 
     // Mostra os times REAIS para palpitar quando: (1) o admin já definiu o
     // confronto e (2) o chaveamento do usuário também resolveu este jogo — assim
