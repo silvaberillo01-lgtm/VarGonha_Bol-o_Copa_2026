@@ -172,14 +172,15 @@ export default function ParticipanteClient({
     const realForaRaw = oficialBracket[num]?.time_fora ?? (isSelecao(game.time_fora) ? game.time_fora : null)
     const realCasa = isSelecao(realCasaRaw) ? (normalizeTeam(realCasaRaw) as string) : null
     const realFora = isSelecao(realForaRaw) ? (normalizeTeam(realForaRaw) as string) : null
-    const realKnown = !!realCasa && !!realFora
-    const casaTeam = game.resultado_lancado ? game.time_casa : realKnown ? realCasa : resolved?.time_casa
-    const foraTeam = game.resultado_lancado ? game.time_fora : realKnown ? realFora : resolved?.time_fora
-    // A previsão do chaveamento deste participante divergiu do confronto real?
-    const bracketMiss =
-      (realKnown || game.resultado_lancado) && !!pred &&
-      (normalizeTeam(pred.time_casa_palpite) !== normalizeTeam(casaTeam) ||
-        normalizeTeam(pred.time_fora_palpite) !== normalizeTeam(foraTeam))
+    // Cada lado vira o time real assim que o jogo que o alimenta termina
+    // (independente do outro); na falta, segue a projeção deste participante.
+    const casaTeam = game.resultado_lancado ? game.time_casa : realCasa ?? resolved?.time_casa
+    const foraTeam = game.resultado_lancado ? game.time_fora : realFora ?? resolved?.time_fora
+    // A previsão do chaveamento deste participante divergiu do confronto real
+    // (em qualquer lado já confirmado)?
+    const casaMiss = !!realCasa && normalizeTeam(pred?.time_casa_palpite) !== realCasa
+    const foraMiss = !!realFora && normalizeTeam(pred?.time_fora_palpite) !== realFora
+    const bracketMiss = !!pred && (casaMiss || foraMiss)
     // Time exibido no lado em que apostou que passava (mapeado do derivado).
     const pickedTeam = pred?.classificado_palpite
       ? normalizeTeam(pred.classificado_palpite) === normalizeTeam(pred.time_casa_palpite)
