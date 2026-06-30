@@ -33,6 +33,9 @@ export interface Game {
   slot_casa?: string | null
   slot_fora?: string | null
   classificado_real?: string | null
+  // Placar dos pênaltis (quando o tempo normal termina empatado)
+  gols_penaltis_casa?: number | null
+  gols_penaltis_fora?: number | null
 }
 
 export interface Prediction {

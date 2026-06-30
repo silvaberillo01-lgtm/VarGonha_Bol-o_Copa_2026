@@ -175,9 +175,16 @@ export default function ParticipanteClient({
             )}
 
             {game.resultado_lancado && (
-              <div className="mt-2 text-center text-xs text-gray-500">
-                Real: <strong>{game.time_casa} {game.gols_casa_real} × {game.gols_fora_real} {game.time_fora}</strong>
-                {game.classificado_real ? ` — passou: ${game.classificado_real}` : ''}
+              <div className="mt-2 text-center text-xs text-gray-500 space-y-0.5">
+                <div>
+                  Real: <strong>{game.time_casa} {game.gols_casa_real} × {game.gols_fora_real} {game.time_fora}</strong>
+                  {game.classificado_real ? ` — passou: ${game.classificado_real}` : ''}
+                </div>
+                {game.gols_penaltis_casa != null && game.gols_penaltis_fora != null && (
+                  <div className="inline-block bg-blue-50 border border-blue-200 text-blue-700 font-semibold rounded px-2 py-0.5">
+                    Pênaltis: {game.gols_penaltis_casa}–{game.gols_penaltis_fora}
+                  </div>
+                )}
               </div>
             )}
 

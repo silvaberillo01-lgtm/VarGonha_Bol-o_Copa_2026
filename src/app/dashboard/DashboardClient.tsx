@@ -332,10 +332,17 @@ export default function DashboardClient({ games, predictions, champion }: Props)
               <div className="flex-1 text-right font-bold text-gray-800 text-sm">{casaTeam}</div>
               <div className="flex items-center gap-2">
                 {game.resultado_lancado ? (
-                  <div className="flex items-center gap-2 text-lg font-bold">
-                    <span className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-gray-700">{game.gols_casa_real}</span>
-                    <span className="text-gray-400">×</span>
-                    <span className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-gray-700">{game.gols_fora_real}</span>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2 text-lg font-bold">
+                      <span className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-gray-700">{game.gols_casa_real}</span>
+                      <span className="text-gray-400">×</span>
+                      <span className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-lg text-gray-700">{game.gols_fora_real}</span>
+                    </div>
+                    {game.gols_penaltis_casa != null && game.gols_penaltis_fora != null && (
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
+                        pên: {game.gols_penaltis_casa}–{game.gols_penaltis_fora}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
