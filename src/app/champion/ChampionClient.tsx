@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { DEADLINE_CAMPEAO, BONUS_CAMPEAO } from '@/lib/scoring'
 import { SpecialPrediction } from '@/types'
 import { SELECOES } from '@/lib/teams'
@@ -28,6 +29,7 @@ export default function ChampionClient({
   myMelhorJogador,
   copaConfig,
 }: Props) {
+  const router = useRouter()
   const [selected, setSelected] = useState(myPrediction?.selecao || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -67,6 +69,9 @@ export default function ChampionClient({
     setSaving(false)
     if (response.ok) {
       setSaved(true)
+      // Sem isso, o Next.js pode reaproveitar o cache de navegação com os
+      // dados antigos ao voltar pra essa página, fazendo o palpite "sumir".
+      router.refresh()
     } else {
       const data = await response.json()
       setError(data.error || 'Erro ao salvar.')
@@ -93,6 +98,7 @@ export default function ChampionClient({
     setSaving2(false)
     if (response.ok) {
       setSaved2(true)
+      router.refresh()
     } else {
       const data = await response.json()
       setError2(data.error || 'Erro ao salvar.')
