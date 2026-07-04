@@ -172,7 +172,7 @@ export default function HojeClient({
               <div className="px-4 py-3 bg-gray-50/60">
                 <div className="flex items-center justify-between mb-2 gap-2">
                   <div className="text-xs font-bold text-gray-500 flex items-center gap-2">
-                    👥 Palpites ({preds.length})
+                    👥 Palpites ({locked ? preds.length : `${preds.length}/${participantes.length}`})
                     {isLive && (
                       <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-full px-2 py-0.5 normal-case">
                         pontuação parcial
@@ -213,9 +213,42 @@ export default function HojeClient({
                 </div>
 
                 {!locked ? (
-                  <div className="text-xs text-gray-400 py-2 text-center">
-                    🔒 Os palpites de todos ficam visíveis quando o jogo começar.
-                  </div>
+                  <>
+                    <div className="text-[11px] text-gray-400 mb-2 text-center">
+                      🔒 Os placares ficam ocultos até o jogo começar — mas dá pra ver quem já palpitou.
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {participantes
+                        .slice()
+                        .sort((a, b) => a.nome.localeCompare(b.nome))
+                        .map((participante) => {
+                          const isMe = participante.id === currentUserId
+                          const jaPalpitou = preds.some((p) => p.user_id === participante.id)
+                          return (
+                            <div
+                              key={participante.id}
+                              className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm ${
+                                isMe ? 'bg-yellow-50 border border-yellow-200' : 'bg-white border border-gray-100'
+                              }`}
+                            >
+                              <span className="font-medium text-gray-700 truncate">
+                                {firstName(participante.nome)}
+                                {isMe && <span className="text-[10px] text-green-600 ml-1">(você)</span>}
+                              </span>
+                              {jaPalpitou ? (
+                                <span className="text-[10px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded shrink-0">
+                                  ✓ palpitou
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded shrink-0">
+                                  sem palpite
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                    </div>
+                  </>
                 ) : preds.length === 0 ? (
                   <div className="text-xs text-gray-400 py-2 text-center">Ninguém palpitou neste jogo.</div>
                 ) : (
