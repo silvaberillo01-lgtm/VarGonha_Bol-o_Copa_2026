@@ -60,11 +60,24 @@ export interface JogoCard {
   palpites: JogoPalpite[]
 }
 
+// Só os campos usados no desenho do card (evita acoplar o tipo completo).
+export interface RankingCompletoChance {
+  max_pontos: number
+  vivo_titulo: boolean
+  vivo_podio: boolean
+  prob_titulo: number
+  prob_podio: number
+}
+
 export interface RankingCompletoEntry {
   nome: string
   total_pontos: number
   acertos_exatos: number
   acertos_resultado: number
+  acertos_parciais: number
+  total_palpites: number
+  // Ausente quando a copa já fechou ou o cálculo não está disponível.
+  chance?: RankingCompletoChance
 }
 
 export interface RankingCompletoCard {
@@ -300,8 +313,18 @@ const JOGO_ROW_H = 84
 const JOGO_FOOTER = 200
 
 // Layout do ranking completo.
-const RANKING_COMPLETO_TOP = 415
+const RANKING_COMPLETO_LEGEND_Y = 428
+const RANKING_COMPLETO_TOP = 452
 const RANKING_COMPLETO_ROW_H = 58
+
+// Texto compacto (1 linha) da chance, nos mesmos moldes da coluna do site.
+function chanceLabel(c?: RankingCompletoChance): { text: string; color: string } {
+  if (!c) return { text: '–', color: '#9ca3af' }
+  if (!c.vivo_podio) return { text: '💀', color: '#9ca3af' }
+  const fmt = (p: number) => (p >= 0.995 ? '>99%' : p < 0.005 ? '<1%' : `${Math.round(p * 100)}%`)
+  if (!c.vivo_titulo) return { text: `🏅${fmt(c.prob_podio)}`, color: '#fdba74' }
+  return { text: `🏆${fmt(c.prob_titulo)}`, color: '#fde047' }
+}
 
 function jogoHeight(c: JogoCard): number {
   const linhas = Math.ceil(c.palpites.length / 2)
@@ -408,12 +431,22 @@ function rankingCompletoHeight(c: RankingCompletoCard): number {
 }
 
 function drawRankingCompleto(ctx: CanvasRenderingContext2D, c: RankingCompletoCard, h: number) {
-  const COL_POS_CX = 105
-  const COL_NAME_X = 165
-  const COL_PTS_CX = 735
-  const COL_EX_CX = 865
-  const COL_RES_CX = 992
-  const margin = 60
+  const margin = 50
+  const COL_POS_CX = 90
+  const COL_NAME_X = 135
+  const NAME_END_X = 520
+
+  // 6 colunas de estatística (Pts, Chance, ⭐, ✅, 🟡, 📝) divididas em partes
+  // iguais no espaço restante até a margem direita.
+  const STATS_START_X = 530
+  const STATS_END_X = W - margin
+  const N_STAT_COLS = 6
+  const statColW = (STATS_END_X - STATS_START_X) / N_STAT_COLS
+  const statCX = (i: number) => STATS_START_X + statColW * (i + 0.5)
+  const [COL_PTS_CX, COL_CHANCE_CX, COL_EX_CX, COL_RES_CX, COL_PARC_CX, COL_PALP_CX] = Array.from(
+    { length: N_STAT_COLS },
+    (_, i) => statCX(i),
+  )
 
   ctx.textAlign = 'center'
   ctx.fillStyle = YELLOW
@@ -429,15 +462,27 @@ function drawRankingCompleto(ctx: CanvasRenderingContext2D, c: RankingCompletoCa
   ctx.fillRect(margin, 352, W - margin * 2, 55)
 
   ctx.fillStyle = YELLOW
-  ctx.font = 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.font = 'bold 22px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
   ctx.textAlign = 'center'
   ctx.fillText('#', COL_POS_CX, 390)
   ctx.textAlign = 'left'
   ctx.fillText('Participante', COL_NAME_X, 390)
   ctx.textAlign = 'center'
   ctx.fillText('Pts', COL_PTS_CX, 390)
+  ctx.fillText('🎯', COL_CHANCE_CX, 390)
   ctx.fillText('⭐', COL_EX_CX, 390)
   ctx.fillText('✅', COL_RES_CX, 390)
+  ctx.fillText('🟡', COL_PARC_CX, 390)
+  ctx.fillText('📝', COL_PALP_CX, 390)
+
+  // Legenda compacta (o site tem a versão completa; aqui só o essencial).
+  ctx.fillStyle = 'rgba(220,252,231,0.65)'
+  ctx.font = '500 19px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+  ctx.fillText(
+    '🎯 chance de título/pódio · ⭐exato ✅resultado 🟡parcial 📝palpites',
+    W / 2,
+    RANKING_COMPLETO_LEGEND_Y,
+  )
 
   // Linhas de dados
   c.entries.forEach((entry, idx) => {
@@ -453,13 +498,13 @@ function drawRankingCompleto(ctx: CanvasRenderingContext2D, c: RankingCompletoCa
     ctx.fillStyle = pos <= 3 ? YELLOW : LIGHT
     ctx.font =
       pos <= 3
-        ? '30px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
-        : 'bold 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+        ? '28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+        : 'bold 22px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
     ctx.fillText(medal, COL_POS_CX, textY)
 
-    const maxNameW = COL_PTS_CX - 65 - COL_NAME_X
+    const maxNameW = NAME_END_X - COL_NAME_X
     ctx.fillStyle = WHITE
-    ctx.font = '600 27px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.font = '600 26px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
     ctx.textAlign = 'left'
     let nome = entry.nome
     while (ctx.measureText(nome).width > maxNameW && nome.length > 1) {
@@ -469,14 +514,21 @@ function drawRankingCompleto(ctx: CanvasRenderingContext2D, c: RankingCompletoCa
     ctx.fillText(nome, COL_NAME_X, textY)
 
     ctx.fillStyle = YELLOW
-    ctx.font = 'bold 28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.font = 'bold 26px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
     ctx.textAlign = 'center'
     ctx.fillText(String(entry.total_pontos), COL_PTS_CX, textY)
 
+    const chance = chanceLabel(entry.chance)
+    ctx.fillStyle = chance.color
+    ctx.font = 'bold 21px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.fillText(chance.text, COL_CHANCE_CX, textY)
+
     ctx.fillStyle = LIGHT
-    ctx.font = '600 24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
+    ctx.font = '600 22px system-ui, -apple-system, Segoe UI, Roboto, sans-serif'
     ctx.fillText(String(entry.acertos_exatos), COL_EX_CX, textY)
     ctx.fillText(String(entry.acertos_resultado), COL_RES_CX, textY)
+    ctx.fillText(String(entry.acertos_parciais), COL_PARC_CX, textY)
+    ctx.fillText(String(entry.total_palpites), COL_PALP_CX, textY)
   })
 
   drawFooter(ctx, 'Quem tá mandando bem no bolão? 👀', h)

@@ -190,6 +190,9 @@ export default function RankingLiveClient({
                 total_pontos: e.total_pontos,
                 acertos_exatos: e.acertos_exatos,
                 acertos_resultado: e.acertos_resultado,
+                acertos_parciais: e.acertos_parciais,
+                total_palpites: e.total_palpites,
+                chance: chances[e.user_id],
               })),
               timestamp: updatedAt.toLocaleString('pt-BR', {
                 day: '2-digit',
