@@ -30,16 +30,20 @@ interface Props {
   chances: Record<string, UserChance>
 }
 
-// Formata probabilidade sem prometer certeza indevida nas pontas.
-function fmtPct(p: number, vivo: boolean): string {
-  if (!vivo) return '0%'
-  if (p >= 0.995 && p < 1) return '>99%'
-  if (p < 0.005) return '<1%'
+// Formata a probabilidade da SIMULAÇÃO — nunca mostra 100%/0% literal, pois
+// isso é uma amostra (3000 sorteios), não uma prova. Certeza de verdade vem
+// de titulo_garantido/podio_garantido (ver abaixo), não daqui.
+function fmtPct(p: number): string {
+  if (p >= 0.995) return '>99%'
+  if (p <= 0.005) return '<1%'
   return `${Math.round(p * 100)}%`
 }
 
 // Célula da coluna "Chance": título em destaque, pódio e teto de pontos como
 // informação secundária. 💀 = matematicamente fora até do pódio.
+// 🔒 = garantido de verdade (pior caso próprio não é alcançado nem pelo
+// melhor caso de mais ninguém) — diferente do 🏆/🏅, que são estimativa por
+// simulação e podem, em tese, ainda ser superados.
 function ChanceCell({ c }: { c: UserChance | undefined }) {
   if (!c) return <span className="text-gray-300">–</span>
 
@@ -52,11 +56,31 @@ function ChanceCell({ c }: { c: UserChance | undefined }) {
     )
   }
 
+  if (c.titulo_garantido) {
+    return (
+      <div className="leading-tight">
+        <span className="text-sm font-bold text-green-700">🔒🏆 garantido</span>
+        <div className="text-[10px] text-gray-400">ninguém mais alcança · máx {c.max_pontos} pts</div>
+      </div>
+    )
+  }
+
+  if (c.podio_garantido) {
+    return (
+      <div className="leading-tight">
+        <span className="text-sm font-bold text-amber-600">🔒🏅 pódio garantido</span>
+        <div className="text-[10px] text-gray-400">
+          título ainda em disputa · ~{fmtPct(c.prob_titulo)} · máx {c.max_pontos} pts
+        </div>
+      </div>
+    )
+  }
+
   if (!c.vivo_titulo) {
     return (
       <div className="leading-tight">
         <span className="text-sm font-bold text-amber-600">
-          🏅 {fmtPct(c.prob_podio, true)}
+          🏅 ~{fmtPct(c.prob_podio)}
         </span>
         <div className="text-[10px] text-gray-400">só pódio · máx {c.max_pontos} pts</div>
       </div>
@@ -67,10 +91,10 @@ function ChanceCell({ c }: { c: UserChance | undefined }) {
   return (
     <div className="leading-tight">
       <span className={`text-sm font-bold ${strong ? 'text-green-700' : 'text-green-600'}`}>
-        🏆 {fmtPct(c.prob_titulo, true)}
+        🏆 ~{fmtPct(c.prob_titulo)}
       </span>
       <div className="text-[10px] text-gray-400">
-        pódio {fmtPct(c.prob_podio, true)} · máx {c.max_pontos} pts
+        pódio ~{fmtPct(c.prob_podio)} · máx {c.max_pontos} pts
       </div>
     </div>
   )
@@ -339,10 +363,17 @@ export default function RankingLiveClient({
             <strong className="text-gray-600">Coluna Chance (só diversão — não muda nada na pontuação):</strong>
           </p>
           <p>
-            🏆 = probabilidade estimada de terminar em 1º e 🏅 = de terminar no pódio (top 3),
-            simulando milhares de cenários para os jogos que faltam — incluindo o bônus de
-            campeão (se a seleção do palpite ainda está viva) e os prêmios de artilheiro e
-            melhor jogador ainda não definidos.
+            🏆 = probabilidade <strong>estimada</strong> de terminar em 1º e 🏅 = de terminar no
+            pódio (top 3), simulando milhares de cenários para os jogos que faltam — incluindo o
+            bônus de campeão (se a seleção do palpite ainda está viva) e os prêmios de artilheiro
+            e melhor jogador ainda não definidos. É estimativa: mesmo perto de 100%, ainda existe
+            (embora raro) um jeito de virar — por isso usamos o <strong>~</strong> na frente.
+          </p>
+          <p>
+            <strong className="text-gray-600">🔒 garantido</strong> é diferente: significa que{' '}
+            <strong>nem no pior caso</strong> (você erra tudo daqui pra frente, seu campeão já
+            está fora) alguém te alcança, <strong>mesmo que os outros acertem tudo</strong>. Isso
+            não é estimativa, é conta fechada.
           </p>
           <p>
             <strong className="text-gray-600">máx</strong> = teto matemático: a pontuação máxima

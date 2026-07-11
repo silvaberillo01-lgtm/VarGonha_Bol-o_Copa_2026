@@ -65,6 +65,8 @@ export interface RankingCompletoChance {
   max_pontos: number
   vivo_titulo: boolean
   vivo_podio: boolean
+  titulo_garantido: boolean
+  podio_garantido: boolean
   prob_titulo: number
   prob_podio: number
 }
@@ -318,12 +320,17 @@ const RANKING_COMPLETO_TOP = 452
 const RANKING_COMPLETO_ROW_H = 58
 
 // Texto compacto (1 linha) da chance, nos mesmos moldes da coluna do site.
+// 🔒 = garantia matemática de verdade; 🏆/🏅 sem cadeado = estimativa por
+// simulação (nunca mostra 100%/0% — usa >99%/<1% pra não prometer certeza
+// que a conta não prova).
 function chanceLabel(c?: RankingCompletoChance): { text: string; color: string } {
   if (!c) return { text: '–', color: '#9ca3af' }
   if (!c.vivo_podio) return { text: '💀', color: '#9ca3af' }
-  const fmt = (p: number) => (p >= 0.995 ? '>99%' : p < 0.005 ? '<1%' : `${Math.round(p * 100)}%`)
-  if (!c.vivo_titulo) return { text: `🏅${fmt(c.prob_podio)}`, color: '#fdba74' }
-  return { text: `🏆${fmt(c.prob_titulo)}`, color: '#fde047' }
+  if (c.titulo_garantido) return { text: '🔒🏆', color: '#fde047' }
+  if (c.podio_garantido) return { text: '🔒🏅', color: '#fdba74' }
+  const fmt = (p: number) => (p >= 0.995 ? '>99%' : p <= 0.005 ? '<1%' : `${Math.round(p * 100)}%`)
+  if (!c.vivo_titulo) return { text: `🏅~${fmt(c.prob_podio)}`, color: '#fdba74' }
+  return { text: `🏆~${fmt(c.prob_titulo)}`, color: '#fde047' }
 }
 
 function jogoHeight(c: JogoCard): number {

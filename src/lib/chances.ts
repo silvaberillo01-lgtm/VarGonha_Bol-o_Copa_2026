@@ -80,6 +80,11 @@ export interface UserChance {
   max_pontos: number
   vivo_titulo: boolean
   vivo_podio: boolean
+  // Garantia MATEMÁTICA (não é estimativa): verdadeiro só quando nem no pior
+  // caso para o participante e no melhor caso para os concorrentes dá pra
+  // ser alcançado — ver `titulo_garantido`/`podio_garantido` mais abaixo.
+  titulo_garantido: boolean
+  podio_garantido: boolean
   prob_titulo: number
   prob_podio: number
 }
@@ -291,6 +296,23 @@ export function computeChances(params: {
   const pontosLider = fechadoDesc[0]
   const pontosTerceiro = fechadoDesc[Math.min(2, fechadoDesc.length - 1)]
 
+  // ---- Garantia matemática (pior caso PRÓPRIO x melhor caso ALHEIO) -------
+  //
+  // total_pontos_fechado é o PISO de cada um: já é o "eu erro tudo daqui pra
+  // frente" (jogos ainda sem resultado somam 0, exatamente como pedido).
+  // max_pontos é o TETO de cada concorrente: o melhor cenário possível pra
+  // ele. Se, mesmo no seu pior caso, nenhum concorrente alcança nem empata
+  // com você no melhor caso DELE, está garantido de verdade — não é a
+  // simulação "não ter sorteado" o azar, é matematicamente impossível.
+  //
+  // Empate conta como ameaça (conservador): não sabemos como o desempate por
+  // acertos vai se comportar em jogos que ainda vão rolar.
+  const ameacas = users.map((u, i) =>
+    users.reduce((n, _, j) => (j !== i && maxPontos[j] >= u.total_pontos_fechado ? n + 1 : n), 0),
+  )
+  const tituloGarantido = ameacas.map((n) => n === 0)
+  const podioGarantido = ameacas.map((n) => n <= 2)
+
   // ---- Monte Carlo --------------------------------------------------------
   const knockoutByNum = new Map<number, ChanceGame>()
   for (const g of games) {
@@ -435,6 +457,8 @@ export function computeChances(params: {
       max_pontos: maxPontos[i],
       vivo_titulo: maxPontos[i] >= pontosLider,
       vivo_podio: maxPontos[i] >= pontosTerceiro,
+      titulo_garantido: tituloGarantido[i],
+      podio_garantido: podioGarantido[i],
       prob_titulo: winCount[i] / sims,
       prob_podio: top3Count[i] / sims,
     }
