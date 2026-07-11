@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { Game } from '@/types'
 import { getGameStatus } from '@/lib/match-utils'
 import ShareCardButton from '@/components/ShareCardButton'
+import { UserChance } from '@/lib/chances'
 
 export interface RankEntry {
   user_id: string
@@ -25,6 +26,54 @@ interface Props {
   currentUserId: string
   artilheiroPontos: string
   melhorJogadorPontos: string
+  // Chances de título/pódio (calculadas no servidor ao carregar a página).
+  chances: Record<string, UserChance>
+}
+
+// Formata probabilidade sem prometer certeza indevida nas pontas.
+function fmtPct(p: number, vivo: boolean): string {
+  if (!vivo) return '0%'
+  if (p >= 0.995 && p < 1) return '>99%'
+  if (p < 0.005) return '<1%'
+  return `${Math.round(p * 100)}%`
+}
+
+// Célula da coluna "Chance": título em destaque, pódio e teto de pontos como
+// informação secundária. 💀 = matematicamente fora até do pódio.
+function ChanceCell({ c }: { c: UserChance | undefined }) {
+  if (!c) return <span className="text-gray-300">–</span>
+
+  if (!c.vivo_podio) {
+    return (
+      <div className="leading-tight">
+        <span className="text-sm font-semibold text-gray-400">💀 fora</span>
+        <div className="text-[10px] text-gray-400">máx {c.max_pontos} pts</div>
+      </div>
+    )
+  }
+
+  if (!c.vivo_titulo) {
+    return (
+      <div className="leading-tight">
+        <span className="text-sm font-bold text-amber-600">
+          🏅 {fmtPct(c.prob_podio, true)}
+        </span>
+        <div className="text-[10px] text-gray-400">só pódio · máx {c.max_pontos} pts</div>
+      </div>
+    )
+  }
+
+  const strong = c.prob_titulo >= 0.5
+  return (
+    <div className="leading-tight">
+      <span className={`text-sm font-bold ${strong ? 'text-green-700' : 'text-green-600'}`}>
+        🏆 {fmtPct(c.prob_titulo, true)}
+      </span>
+      <div className="text-[10px] text-gray-400">
+        pódio {fmtPct(c.prob_podio, true)} · máx {c.max_pontos} pts
+      </div>
+    </div>
+  )
 }
 
 // Ordena por uma pontuação escolhida, com os mesmos critérios de desempate.
@@ -54,6 +103,7 @@ export default function RankingLiveClient({
   currentUserId,
   artilheiroPontos,
   melhorJogadorPontos,
+  chances,
 }: Props) {
   const supabase = createClient()
   const [ranking, setRanking] = useState<RankEntry[]>(sortRanking(initialRanking))
@@ -112,6 +162,9 @@ export default function RankingLiveClient({
   const jogosEmAndamento = liveGames.filter(
     (g) => getGameStatus(g as Game, now) === 'em_andamento',
   ).length
+
+  // Quantos ainda podem levar o título (matematicamente).
+  const vivosTitulo = ranking.filter((r) => chances[r.user_id]?.vivo_titulo).length
 
   const getMedalha = (pos: number) => {
     if (pos === 0) return '🥇'
@@ -174,6 +227,16 @@ export default function RankingLiveClient({
         </p>
       )}
 
+      {vivosTitulo > 0 && (
+        <div className="mb-4 text-sm bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg px-3 py-2">
+          🔥 <strong>{vivosTitulo}</strong>{' '}
+          {vivosTitulo === 1
+            ? 'participante ainda pode ser campeão'
+            : 'participantes ainda podem ser campeões'}{' '}
+          do bolão — tem muita coisa em jogo! ⚽
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -182,6 +245,7 @@ export default function RankingLiveClient({
                 <th className="px-3 py-3 text-left text-sm font-bold">#</th>
                 <th className="px-3 py-3 text-left text-sm font-bold">Participante</th>
                 <th className="px-3 py-3 text-center text-sm font-bold">Pontos</th>
+                <th className="px-3 py-3 text-center text-sm font-bold">Chance</th>
                 <th className="px-3 py-3 text-center text-sm font-bold hidden sm:table-cell">⭐</th>
                 <th className="px-3 py-3 text-center text-sm font-bold hidden sm:table-cell">✅</th>
                 <th className="px-3 py-3 text-center text-sm font-bold hidden sm:table-cell">🟡</th>
@@ -191,7 +255,7 @@ export default function RankingLiveClient({
             <tbody>
               {ranking.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400">
+                  <td colSpan={8} className="text-center py-12 text-gray-400">
                     Nenhum dado disponível ainda
                   </td>
                 </tr>
@@ -231,6 +295,9 @@ export default function RankingLiveClient({
                       <td className="px-3 py-3 text-center">
                         <span className="font-bold text-green-700 text-lg">{entry.total_pontos}</span>
                       </td>
+                      <td className="px-3 py-3 text-center">
+                        <ChanceCell c={chances[entry.user_id]} />
+                      </td>
                       <td className="px-3 py-3 text-center hidden sm:table-cell text-yellow-600 font-semibold">
                         {entry.acertos_exatos}
                       </td>
@@ -263,6 +330,22 @@ export default function RankingLiveClient({
           <span className="text-purple-600">🏆 Campeão certo = 200 pts</span>
           <span className="text-orange-600">⚽ Artilheiro certo = {artilheiroPontos} pts</span>
           <span className="text-pink-600">🌟 Melhor Jogador certo = {melhorJogadorPontos} pts</span>
+        </div>
+        <div className="mt-3 border-t pt-3 text-xs text-gray-500 space-y-1">
+          <p>
+            <strong className="text-gray-600">Coluna Chance (só diversão — não muda nada na pontuação):</strong>
+          </p>
+          <p>
+            🏆 = probabilidade estimada de terminar em 1º e 🏅 = de terminar no pódio (top 3),
+            simulando milhares de cenários para os jogos que faltam — incluindo o bônus de
+            campeão (se a seleção do palpite ainda está viva) e os prêmios de artilheiro e
+            melhor jogador ainda não definidos.
+          </p>
+          <p>
+            <strong className="text-gray-600">máx</strong> = teto matemático: a pontuação máxima
+            que dá para alcançar gabaritando tudo daqui pra frente. 💀 = matematicamente fora
+            até do top 3. Recalculado ao abrir a página.
+          </p>
         </div>
       </div>
     </div>
