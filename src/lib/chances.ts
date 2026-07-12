@@ -150,9 +150,17 @@ function computePossibilities(games: ChanceGame[]): Record<number, MatchPossibil
 
   for (const m of BRACKET_TEMPLATE) {
     const g = byNum.get(m.num)
-    const casaReal = normalizeTeam(g?.time_casa ?? null)
-    const foraReal = normalizeTeam(g?.time_fora ?? null)
-    // Time já lançado pelo admin vale mais que a derivação pelo template.
+    // Só na fase32 o time_casa/time_fora do jogo é confiável como "time real":
+    // nas fases seguintes (oitavas em diante), esses campos costumam guardar o
+    // CÓDIGO DO SLOT ("W97", "L101"...) até o admin preencher o confronto na
+    // hora do jogo — tratar isso como nome de time faria a comparação nunca
+    // bater com o palpite de ninguém. Mesma regra usada em bracket.ts
+    // (computeOfficialBracket/computeUserBracket): fora da fase32, sempre
+    // deriva do template via winners/losers já resolvidos.
+    const isFase32 = m.fase === 'fase32'
+    const casaReal = isFase32 ? normalizeTeam(g?.time_casa ?? null) : null
+    const foraReal = isFase32 ? normalizeTeam(g?.time_fora ?? null) : null
+    // Time já lançado pelo admin (na fase32) vale mais que a derivação pelo template.
     const casa: TeamSet = casaReal ? new Set([casaReal]) : slotSet(m.slot_casa)
     const fora: TeamSet = foraReal ? new Set([foraReal]) : slotSet(m.slot_fora)
 
@@ -381,8 +389,12 @@ export function computeChances(params: {
 
     for (const m of BRACKET_TEMPLATE) {
       const g = knockoutByNum.get(m.num)
-      const casa = normalizeTeam(g?.time_casa ?? null) ?? resolveSlot(m.slot_casa)
-      const fora = normalizeTeam(g?.time_fora ?? null) ?? resolveSlot(m.slot_fora)
+      // Mesma ressalva de computePossibilities: fora da fase32, time_casa/fora
+      // pode ser só o código do slot ("W97"), não o nome do time — nesse caso
+      // ignora e deriva via winners/losers já sorteados nesta simulação.
+      const isFase32 = m.fase === 'fase32'
+      const casa = (isFase32 ? normalizeTeam(g?.time_casa ?? null) : null) ?? resolveSlot(m.slot_casa)
+      const fora = (isFase32 ? normalizeTeam(g?.time_fora ?? null) : null) ?? resolveSlot(m.slot_fora)
 
       if (g?.resultado_lancado) {
         const w = decidedWinner(g)
