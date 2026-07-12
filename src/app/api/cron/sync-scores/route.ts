@@ -11,6 +11,10 @@ export const dynamic = 'force-dynamic'
 const LIVE_WINDOW_MIN = 210
 // Tolerância antes do horário marcado (a API pode marcar IN_PLAY um pouco antes).
 const PRE_KICKOFF_MIN = 5
+// Depois que o jogo já saiu da janela ao vivo, ainda reconferimos o placar por
+// mais esse tempo (mesmo já lançado) — cobre gol anulado pelo VAR ou correção
+// tardia da fonte de dados que só chega depois do "FINISHED" inicial.
+const RECHECK_WINDOW_MIN = 60
 
 function utcDay(iso: string): string {
   return new Date(iso).toISOString().slice(0, 10)
@@ -43,16 +47,18 @@ async function handle(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'auto_sync_disabled', apiCalls: 0 })
   }
 
-  // 2) Jogos na janela ao vivo e ainda não finalizados (gatekeeper).
+  // 2) Jogos na janela ao vivo + jogos já lançados dentro da janela extra de
+  // reconferência (RECHECK_WINDOW_MIN): mesmo com resultado_lancado = true,
+  // continuamos buscando o placar por mais um tempo para pegar correções
+  // tardias (gol anulado pelo VAR, atraso da fonte de dados).
   const now = Date.now()
-  const lowerBound = new Date(now - LIVE_WINDOW_MIN * 60_000).toISOString()
+  const recheckLowerBound = new Date(now - (LIVE_WINDOW_MIN + RECHECK_WINDOW_MIN) * 60_000).toISOString()
   const upperBound = new Date(now + PRE_KICKOFF_MIN * 60_000).toISOString()
 
   const { data: candidates } = await admin
     .from('games')
     .select('*')
-    .eq('resultado_lancado', false)
-    .gte('data_hora', lowerBound)
+    .gte('data_hora', recheckLowerBound)
     .lte('data_hora', upperBound)
 
   if (!candidates || candidates.length === 0) {
@@ -71,10 +77,11 @@ async function handle(request: Request) {
 
   const byExtId = new Map<number, FdMatch>(result.matches.map((m) => [m.id, m]))
   const nowIso = new Date().toISOString()
-  const summary: { updated: number; finished: number; matched: number } = {
+  const summary: { updated: number; finished: number; matched: number; conflicts: number } = {
     updated: 0,
     finished: 0,
     matched: 0,
+    conflicts: 0,
   }
 
   for (const game of candidates) {
@@ -114,6 +121,16 @@ async function handle(request: Request) {
 
     const isKnockout = game.fase !== 'grupos'
     const empate = golsCasa === golsFora
+
+    // Reconferência de um mata-mata JÁ decidido que "voltaria a empatar" (ex.:
+    // gol anulado depois do lançamento) não dá pra resolver sozinho — precisa
+    // do admin dizer quem avança nos pênaltis. Não mexe no jogo para não
+    // derrubar um classificado válido sem ter o desempate.
+    if (game.resultado_lancado && isKnockout && empate) {
+      summary.conflicts++
+      continue
+    }
+
     // No mata-mata, empate no fim = pênaltis (a API free não fornece) → NÃO
     // finaliza automaticamente; deixa o admin confirmar quem avançou.
     const finished = status === 'FINISHED' && !(isKnockout && empate)

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Profile, Game } from '@/types'
-import { SELECOES, normalizeTeam } from '@/lib/teams'
+import { SELECOES, normalizeTeam, isSelecao } from '@/lib/teams'
+import { computeOfficialBracket, OfficialGameInput } from '@/lib/bracket'
 
 const KNOCKOUT_FASES = [
   { key: 'fase32', label: '1/16 avos de Final' },
@@ -47,6 +48,25 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
   const [userMsg, setUserMsg] = useState<Record<string, string>>({})
   const [gameMsg, setGameMsg] = useState<Record<string, string>>({})
   const [deletingUser, setDeletingUser] = useState<Record<string, boolean>>({})
+
+  // Chaveamento oficial (mesmo motor da aba "Chave"): resolve o time real de
+  // um confronto assim que os jogos anteriores que o alimentam já saíram,
+  // mesmo que este jogo em si ainda não tenha sido editado pelo admin.
+  const officialByNum = useMemo(() => {
+    const knockout = localGames.filter((g) => g.fase !== 'grupos')
+    const inputs: OfficialGameInput[] = knockout.map((g) => ({
+      num: numFromCode(g.match_code),
+      resultado_lancado: g.resultado_lancado,
+      time_casa: g.time_casa,
+      time_fora: g.time_fora,
+      classificado_real: g.classificado_real ?? null,
+      gols_casa_real: g.gols_casa_real,
+      gols_fora_real: g.gols_fora_real,
+      gols_penaltis_casa: g.gols_penaltis_casa ?? null,
+      gols_penaltis_fora: g.gols_penaltis_fora ?? null,
+    }))
+    return computeOfficialBracket(inputs)
+  }, [localGames])
 
   // Edição dos jogos de mata-mata (times reais, placar, classificado, data)
   const [koEdits, setKoEdits] = useState<Record<string, {
@@ -316,9 +336,14 @@ export default function AdminClient({ users, games, copaConfig, specialPredictio
       const off = d.getTimezoneOffset() * 60000
       return new Date(d.getTime() - off).toISOString().slice(0, 16)
     }
+    // Se o campo ainda guarda o slot cru ("W74"...), usa o time já resolvido
+    // pelo chaveamento oficial (times das fases anteriores já decididas).
+    const r = officialByNum[numFromCode(game.match_code)]
+    const casaReal = normalizeTeam(game.time_casa)
+    const foraReal = normalizeTeam(game.time_fora)
     return {
-      time_casa: normalizeTeam(game.time_casa) || '',
-      time_fora: normalizeTeam(game.time_fora) || '',
+      time_casa: (isSelecao(casaReal) ? casaReal : r?.time_casa) || '',
+      time_fora: (isSelecao(foraReal) ? foraReal : r?.time_fora) || '',
       casa: game.gols_casa_real != null ? String(game.gols_casa_real) : '',
       fora: game.gols_fora_real != null ? String(game.gols_fora_real) : '',
       classificado: normalizeTeam(game.classificado_real) || '',

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Game, Prediction } from '@/types'
 import { DEADLINE_FASE1, getTipoAcerto, getTipoAcertoMataMata } from '@/lib/scoring'
 import { knockoutLockTime } from '@/lib/match-utils'
@@ -35,6 +36,7 @@ const KNOCKOUT_FASES: { key: string; label: string }[] = [
 const numFromCode = (code?: string | null) => (code ? parseInt(code.replace(/^M/, '')) : NaN)
 
 export default function DashboardClient({ games, predictions, champion }: Props) {
+  const router = useRouter()
   const [mainTab, setMainTab] = useState<'grupos' | 'eliminatoria'>('grupos')
   const [selectedGroup, setSelectedGroup] = useState('A')
   const [selectedKoFase, setSelectedKoFase] = useState('fase32')
@@ -164,8 +166,12 @@ export default function DashboardClient({ games, predictions, champion }: Props)
       body: JSON.stringify({ game_id: gameId, gols_casa: golsCasa, gols_fora: golsFora }),
     })
     setSaving((prev) => ({ ...prev, [gameId]: false }))
-    if (response.ok) setSaved((prev) => ({ ...prev, [gameId]: true }))
-    else {
+    if (response.ok) {
+      setSaved((prev) => ({ ...prev, [gameId]: true }))
+      // Sem isso, o Next.js pode reaproveitar o cache de navegação com os
+      // dados antigos ao voltar pra essa página, fazendo o palpite "sumir".
+      router.refresh()
+    } else {
       const data = await response.json()
       setErrors((prev) => ({ ...prev, [gameId]: data.error || 'Erro ao salvar.' }))
     }
@@ -206,8 +212,10 @@ export default function DashboardClient({ games, predictions, champion }: Props)
       }),
     })
     setSaving((prev) => ({ ...prev, [gameId]: false }))
-    if (response.ok) setSaved((prev) => ({ ...prev, [gameId]: true }))
-    else {
+    if (response.ok) {
+      setSaved((prev) => ({ ...prev, [gameId]: true }))
+      router.refresh()
+    } else {
       const data = await response.json()
       setErrors((prev) => ({ ...prev, [gameId]: data.error || 'Erro ao salvar.' }))
     }
