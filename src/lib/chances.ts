@@ -218,6 +218,32 @@ function maxPontosJogo(
 // Simulação
 // ---------------------------------------------------------------------------
 
+// Hash determinístico (FNV-1a) de uma string -> inteiro 32-bit. Usado para
+// transformar o estado atual (jogos/palpites/campeão/especiais) numa semente
+// de RNG, para que a simulação dê o MESMO resultado enquanto os dados não
+// mudarem — sem isso, cada F5 sorteava de novo e a % oscilava à toa.
+function hashSeed(str: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return h >>> 0
+}
+
+// PRNG determinístico (mulberry32) — mesma semente sempre gera a mesma
+// sequência, ao contrário de Math.random().
+function seededRng(seed: number): () => number {
+  let a = seed >>> 0
+  return function () {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function poisson(lambda: number, rng: () => number): number {
   const L = Math.exp(-lambda)
   let k = 0
@@ -258,12 +284,26 @@ export function computeChances(params: {
     championPicks,
     championSettled,
     pendingSpecials,
-    sims = 3000,
+    sims = 8000,
     now = new Date(),
-    rng = Math.random,
+    rng,
   } = params
 
   if (users.length === 0) return {}
+
+  // Sem `rng` explícito (uso normal, fora de teste): semente determinística
+  // a partir dos PRÓPRIOS dados (jogos, palpites, campeão, especiais) — não
+  // do relógio. Isso faz o resultado ficar ESTÁVEL entre um F5 e outro (a
+  // pessoa não pode ver 74% e, ao atualizar, 73%, sem nada ter mudado de
+  // verdade) e só varia quando o estado real varia (sai um resultado, um
+  // palpite é travado, um especial é avaliado).
+  const effectiveRng =
+    rng ??
+    seededRng(
+      hashSeed(
+        JSON.stringify([games, predictions, users, championPicks, championSettled, pendingSpecials]),
+      ),
+    )
 
   const poss = computePossibilities(games)
   const openGames = games.filter((g) => !g.resultado_lancado)
@@ -370,8 +410,8 @@ export function computeChances(params: {
     // nesse período a simulação cobre grupos + campeão, e o mata-mata só
     // depois que a fase32 for lançada.
     for (const g of openGroupGames) {
-      const gc = poisson(GOLS_LAMBDA, rng)
-      const gf = poisson(GOLS_LAMBDA, rng)
+      const gc = poisson(GOLS_LAMBDA, effectiveRng)
+      const gf = poisson(GOLS_LAMBDA, effectiveRng)
       predByGame.get(g.id)?.forEach((pr, uIdx) => {
         pts[uIdx] += calcularPontos(pr.gols_casa, pr.gols_fora, gc, gf)
       })
@@ -410,10 +450,10 @@ export function computeChances(params: {
         continue
       }
 
-      const gc = poisson(GOLS_LAMBDA, rng)
-      const gf = poisson(GOLS_LAMBDA, rng)
+      const gc = poisson(GOLS_LAMBDA, effectiveRng)
+      const gf = poisson(GOLS_LAMBDA, effectiveRng)
       // Empate no tempo normal: pênaltis, moeda honesta.
-      const w = gc > gf ? casa : gf > gc ? fora : rng() < 0.5 ? casa : fora
+      const w = gc > gf ? casa : gf > gc ? fora : effectiveRng() < 0.5 ? casa : fora
       winners[m.num] = w
       losers[m.num] = w === casa ? fora : casa
 
@@ -438,7 +478,7 @@ export function computeChances(params: {
 
     // Prêmios pendentes.
     for (const pool of pools) {
-      let r = rng() * pool.totalWeight
+      let r = effectiveRng() * pool.totalWeight
       for (const opt of pool.options) {
         r -= opt.weight
         if (r < 0) {
