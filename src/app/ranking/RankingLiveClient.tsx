@@ -132,6 +132,7 @@ export default function RankingLiveClient({
   const supabase = createClient()
   const [ranking, setRanking] = useState<RankEntry[]>(sortRanking(initialRanking))
   const [liveGames, setLiveGames] = useState(games)
+  const [chanceData, setChanceData] = useState(chances)
   const [updatedAt, setUpdatedAt] = useState<Date>(new Date())
   const [refreshing, setRefreshing] = useState(false)
   const [now, setNow] = useState<Date>(new Date())
@@ -142,10 +143,18 @@ export default function RankingLiveClient({
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
-    const [{ data: rankRows }, { data: gameRows }] = await Promise.all([
+    const [{ data: rankRows }, { data: gameRows }, chancesRes] = await Promise.all([
       supabase.rpc('get_ranking'),
       supabase.from('games').select('id, data_hora, resultado_lancado, fase'),
+      // Recalculado no servidor (precisa dos palpites de todo mundo, que não
+      // dá pra ler direto do client) — sem isso a coluna Chance ficava presa
+      // no valor do primeiro carregamento da página.
+      fetch('/api/chances').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ])
+
+    if (chancesRes?.chances) {
+      setChanceData(chancesRes.chances)
+    }
 
     if (rankRows) {
       const mapped: RankEntry[] = (rankRows as Record<string, unknown>[]).map((r) => {
@@ -188,7 +197,7 @@ export default function RankingLiveClient({
   ).length
 
   // Quantos ainda podem levar o título (matematicamente).
-  const vivosTitulo = ranking.filter((r) => chances[r.user_id]?.vivo_titulo).length
+  const vivosTitulo = ranking.filter((r) => chanceData[r.user_id]?.vivo_titulo).length
 
   const getMedalha = (pos: number) => {
     if (pos === 0) return '🥇'
@@ -216,7 +225,7 @@ export default function RankingLiveClient({
                 acertos_resultado: e.acertos_resultado,
                 acertos_parciais: e.acertos_parciais,
                 total_palpites: e.total_palpites,
-                chance: chances[e.user_id],
+                chance: chanceData[e.user_id],
               })),
               timestamp: updatedAt.toLocaleString('pt-BR', {
                 day: '2-digit',
@@ -323,7 +332,7 @@ export default function RankingLiveClient({
                         <span className="font-bold text-green-700 text-lg">{entry.total_pontos}</span>
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <ChanceCell c={chances[entry.user_id]} />
+                        <ChanceCell c={chanceData[entry.user_id]} />
                       </td>
                       <td className="px-3 py-3 text-center hidden sm:table-cell text-yellow-600 font-semibold">
                         {entry.acertos_exatos}
