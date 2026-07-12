@@ -297,11 +297,29 @@ export function computeChances(params: {
   // pessoa não pode ver 74% e, ao atualizar, 73%, sem nada ter mudado de
   // verdade) e só varia quando o estado real varia (sai um resultado, um
   // palpite é travado, um especial é avaliado).
+  //
+  // IMPORTANTE: as queries que alimentam isso (getChances.ts) não têm
+  // ORDER BY — o Postgres/PostgREST não garante a mesma ordem de linhas
+  // entre duas chamadas. Por isso a semente é calculada em cima de cópias
+  // ORDENADAS (por uma chave estável), nunca da ordem "como chegou" — senão
+  // a mesma base de dados gera semente diferente a cada request, e a
+  // "determinística" volta a parecer aleatória.
   const effectiveRng =
     rng ??
     seededRng(
       hashSeed(
-        JSON.stringify([games, predictions, users, championPicks, championSettled, pendingSpecials]),
+        JSON.stringify([
+          [...games].sort((a, b) => a.id.localeCompare(b.id)),
+          [...predictions].sort((a, b) =>
+            `${a.user_id}|${a.game_id}`.localeCompare(`${b.user_id}|${b.game_id}`),
+          ),
+          [...users].sort((a, b) => a.user_id.localeCompare(b.user_id)),
+          Object.entries(championPicks).sort(([a], [b]) => a.localeCompare(b)),
+          championSettled,
+          [...pendingSpecials].sort((a, b) =>
+            `${a.user_id}|${a.tipo}`.localeCompare(`${b.user_id}|${b.tipo}`),
+          ),
+        ]),
       ),
     )
 
@@ -370,16 +388,34 @@ export function computeChances(params: {
   const openGroupGames = openGames.filter((g) => g.fase === 'grupos')
 
   // Pools dos prêmios pendentes, por tipo.
+  //
+  // IMPORTANTE: o sorteio abaixo ("roleta") depende da ORDEM das opções — a
+  // mesma semente/mesmo `r` sorteado pode cair num vencedor diferente se as
+  // opções estiverem em outra ordem. Como os Maps abaixo preservam ordem de
+  // inserção, e essa inserção segue a ordem de `pendingSpecials` (que vem do
+  // banco sem ORDER BY, logo não é estável entre chamadas), pré-ordena por
+  // uma chave estável antes de agrupar — senão a semente até fica igual, mas
+  // o resultado do sorteio não.
   const pools: SpecialPool[] = []
   {
+    const sortedSpecials = [...pendingSpecials].sort((a, b) => {
+      if (a.tipo !== b.tipo) return a.tipo.localeCompare(b.tipo)
+      const pa = a.palpite.trim().toLowerCase()
+      const pb = b.palpite.trim().toLowerCase()
+      if (pa !== pb) return pa.localeCompare(pb)
+      return a.user_id.localeCompare(b.user_id)
+    })
     const byTipo = new Map<string, PendingSpecial[]>()
-    for (const sp of pendingSpecials) {
+    for (const sp of sortedSpecials) {
       if (!idxByUser.has(sp.user_id)) continue
       const list = byTipo.get(sp.tipo) ?? []
       list.push(sp)
       byTipo.set(sp.tipo, list)
     }
-    byTipo.forEach((list) => {
+    // `byTipo` já fica em ordem alfabética de tipo (sortedSpecials garante),
+    // mas itera explícito por clareza — não depende da ordem de inserção.
+    for (const tipo of Array.from(byTipo.keys()).sort()) {
+      const list = byTipo.get(tipo)!
       const byPalpite = new Map<string, { userIdx: number; valor: number }[]>()
       for (const sp of list) {
         const key = sp.palpite.trim().toLowerCase()
@@ -394,7 +430,7 @@ export function computeChances(params: {
       // "Outro": o prêmio sai para um jogador que ninguém palpitou.
       options.push({ weight: 1, members: [] })
       pools.push({ options, totalWeight: options.reduce((s, o) => s + o.weight, 0) })
-    })
+    }
   }
 
   const nUsers = users.length
@@ -497,7 +533,11 @@ export function computeChances(params: {
       if (ub.acertos_exatos !== ua.acertos_exatos) return ub.acertos_exatos - ua.acertos_exatos
       if (ub.acertos_resultado !== ua.acertos_resultado) return ub.acertos_resultado - ua.acertos_resultado
       if (ub.acertos_parciais !== ua.acertos_parciais) return ub.acertos_parciais - ua.acertos_parciais
-      return a - b
+      // Empate total (raro): desempate por user_id, não por posição no array
+      // — a posição interna reflete a ordem em que os dados chegaram do
+      // banco (sem ORDER BY), então usar `a - b` aqui reabriria a mesma
+      // instabilidade que o resto da função evita.
+      return ua.user_id.localeCompare(ub.user_id)
     })
     winCount[order[0]]++
     for (let k = 0; k < Math.min(3, nUsers); k++) top3Count[order[k]]++

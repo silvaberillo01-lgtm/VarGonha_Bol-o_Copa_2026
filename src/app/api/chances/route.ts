@@ -3,6 +3,7 @@ import { getChances } from '@/lib/getChances'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // Recalcula a coluna Chance sob demanda — chamada pelo botão "Atualizar" e
 // pelo auto-refresh da página de ranking, já que aquele cálculo roda no
@@ -23,5 +24,10 @@ export async function GET() {
   }
 
   const chances = await getChances(supabase)
-  return NextResponse.json({ chances })
+  // Sem isso, um proxy/CDN no meio do caminho (ou o próprio navegador) pode
+  // guardar a resposta e servir de novo em "Atualizar" seguintes.
+  return NextResponse.json(
+    { chances },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } },
+  )
 }

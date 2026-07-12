@@ -149,7 +149,9 @@ export default function RankingLiveClient({
       // Recalculado no servidor (precisa dos palpites de todo mundo, que não
       // dá pra ler direto do client) — sem isso a coluna Chance ficava presa
       // no valor do primeiro carregamento da página.
-      fetch('/api/chances').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('/api/chances', { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
     ])
 
     if (chancesRes?.chances) {
