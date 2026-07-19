@@ -97,24 +97,34 @@ export function calcularPontosMataMata(p: PalpiteMataMata, r: ResultadoMataMata)
   const cenario: Cenario = acertosTimes === 2 ? 'A' : acertosTimes === 1 ? 'B' : 'C'
 
   // Lado que avança no palpite e na realidade (posicional).
+  //
+  // O PLACAR manda: o lado que avança é quem venceu no placar apostado (e no
+  // placar real). O "classificado" explícito só desempata em caso de EMPATE —
+  // aí o placar sozinho não define quem passa (pênaltis). Fazer o contrário
+  // (classificado primeiro) permitia pontuar como "acertou o classificado"
+  // quem apostou o placar do time que PERDEU: ex.: palpite 1×2 (fora ganhando)
+  // num jogo que terminou 1×0 (casa ganhou) não pode receber crédito de
+  // classificado. Além disso, o `classificado_palpite` guardado pode ficar
+  // desalinhado quando o chaveamento do usuário é recalculado, então derivar do
+  // placar é mais consistente com o que o jogador vê e aposta.
   const ladoPalpite =
-    clp && clp === tcp
-      ? 'casa'
-      : clp && clp === tfp
-      ? 'fora'
-      : p.gols_casa > p.gols_fora
+    p.gols_casa > p.gols_fora
       ? 'casa'
       : p.gols_fora > p.gols_casa
       ? 'fora'
+      : clp && clp === tcp
+      ? 'casa'
+      : clp && clp === tfp
+      ? 'fora'
       : null
   const ladoReal =
-    clr && clr === tcr
-      ? 'casa'
-      : clr && clr === tfr
-      ? 'fora'
-      : r.gols_casa_real > r.gols_fora_real
+    r.gols_casa_real > r.gols_fora_real
       ? 'casa'
       : r.gols_fora_real > r.gols_casa_real
+      ? 'fora'
+      : clr && clr === tcr
+      ? 'casa'
+      : clr && clr === tfr
       ? 'fora'
       : null
 
